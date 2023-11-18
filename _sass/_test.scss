@@ -1,0 +1,39 @@
+.image-wrap {
+    float: left;
+    margin-right: 20px;
+    margin-bottom: 10px;
+}
+
+.image-wrap-right {
+    float: right;
+    margin-left: 20px;
+    margin-bottom: 10px;
+}
+
+.image-half {
+    max-width: 50%;
+}
+
+.image-40 {
+    max-width: 40%;
+}
+
+.image-third {
+    max-width: 33%;
+}
+
+.image-quarter {
+    max-width: 25%
+}
+
+.image-full {
+    width: 100%;
+}
+
+// Hack to clear wrapping before each title
+h2:before,
+h3:before {
+    content: "";
+    display: table;
+    clear: both;
+}
