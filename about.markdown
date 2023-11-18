@@ -1,7 +1,7 @@
 ---
 layout: page
 title: CV / Resume
-permalink: /about/
+permalink: /resume/
 ---
 ![JMac](/assets/img/jmac.jpg){:class="image-wrap-right image-third"}
 
