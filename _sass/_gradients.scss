@@ -1,0 +1,24 @@
+/** Animated background gradient **/
+.animated-gradient-bg {
+    background: linear-gradient(45deg, #000020, #300030, #500040, #300030, #000020); /* Dark purple/blue base */
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.gradient-bg {
+    background: linear-gradient(0,
+            #000020,
+            #300030,
+            #500040,
+            #300030,
+            #000020,
+            #000020,
+            rgba(105, 105, 205, 0.34)
+    );
+}

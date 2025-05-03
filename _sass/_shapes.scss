@@ -1,0 +1,29 @@
+/* Decorative Triangle using clip-path */
+.decorative-triangle {
+    width: 150px;
+    height: 130px; /* Adjust size */
+    background: linear-gradient(135deg, var(--neon-pink), var(--neon-purple));
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    opacity: 0.7; /* Optional transparency */
+    /* Position this absolutely or within your layout */
+    position: absolute;
+    bottom: 5%;
+    right: 5%;
+    z-index: 1; /* Below scanlines maybe, above grid */
+}
+
+/* Or use pseudo-elements on existing containers */
+.container-with-triangle::before {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 50px solid transparent;
+    border-right: 50px solid transparent;
+    border-bottom: 80px solid var(--neon-cyan); /* Triangle color */
+    opacity: 0.6;
+    /* Position relative to the container */
+    top: -40px; /* Example positioning */
+    left: 50%;
+    transform: translateX(-50%);
+}
