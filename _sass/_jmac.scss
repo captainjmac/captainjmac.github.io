@@ -1,3 +1,7 @@
+:root {
+    --grid-color: #40b5e5;
+}
+
 .image-wrap {
     float: left;
     margin-right: 20px;
@@ -44,14 +48,25 @@ h3:before {
     width: 250%;
     height: 100%;
     background:
-            -webkit-linear-gradient(top, cyan 2px, transparent 8px),
-            -webkit-linear-gradient(left, cyan 2px, transparent 8px);
+            -webkit-linear-gradient(top, var(--grid-color) 2px, transparent 8px),
+            -webkit-linear-gradient(left, var(--grid-color) 2px, transparent 8px);
     background-size: 125px 100px;
     background-position: -1px, -1px, -1px, -1px;
     transform: perspective(85px) rotateX(8deg);
     transform-origin: 50% 87%;
     animation: moveUp 2s linear infinite;
     animation-direction: reverse;
+}
+
+.jmac-logo {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 50%;
+
+    &.reflection {
+        transform: translate(-50%, 79%) scaleX(-1)
+    }
 }
 
 @keyframes moveUp{
