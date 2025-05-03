@@ -1,0 +1,23 @@
+body::before { /* Or apply to a specific container */
+    content: "";
+    position: fixed; /* Fixed to cover viewport */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+                    rgba(18, 16, 16, 0) 50%, /* Adjust transparency */
+                    rgba(0, 0, 0, 0.25) 50% /* Adjust darkness/color */
+    );
+    background-size: 100% 4px; /* Adjust line height */
+    z-index: 1000; /* Ensure it's on top */
+    pointer-events: none; /* Allows interaction with elements below */
+    animation: scanlines 100s linear infinite; /* Subtle movement */
+}
+
+@keyframes scanlines {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 100%; }
+}

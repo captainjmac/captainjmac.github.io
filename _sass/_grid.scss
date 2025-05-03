@@ -1,0 +1,36 @@
+.grid-container {
+    position: relative;
+    margin-left: -75%;
+    width: 250%;
+    height: 100%;
+    background:
+            -webkit-linear-gradient(top, var(--grid-color) 2px, transparent 8px),
+            -webkit-linear-gradient(left, var(--grid-color) 2px, transparent 8px);
+    background-size: 125px 100px;
+    background-position: -1px, -1px, -1px, -1px;
+    transform: perspective(85px) rotateX(8deg);
+    transform-origin: 50% 87%;
+    animation: moveUp 2s linear infinite;
+    animation-direction: reverse;
+    z-index: 1;
+}
+
+@keyframes moveUp{
+    0% {
+        background-position: -1px -1px, -1px -1px;
+    }
+    100% {
+        background-position: -100px -100px, -1px -1px;
+    }
+}
+
+.grid-container::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 94%, rgba(0, 0, 0, 1) 98%);
+    pointer-events: none; /* Allows click events to pass through */
+}
