@@ -5,6 +5,10 @@
     top: 0;
     left: 0;
 }
+
+.scanlines {
+    pointer-events: none;
+}
 .scanlines::before { /* Or apply to a specific container */
     content: "";
     position: fixed; /* Fixed to cover viewport */
@@ -19,7 +23,7 @@
         rgba(0, 0, 0, 0.25) 50% /* Adjust darkness/color */
     );
     background-size: 100% 4px; /* Adjust line height */
-    z-index: 1000; /* Ensure it's on top */
+    z-index: 10; /* Ensure it's on top */
     pointer-events: none; /* Allows interaction with elements below */
     animation: scanlines 100s linear infinite; /* Subtle movement */
 }

@@ -30,6 +30,9 @@ github_username:  captainjmac
 
 permalink: /:title/
 
+show_excerpts: true
+excerpt_separator: <!--more-->
+
 # Build settings
 theme: minima
 plugins:

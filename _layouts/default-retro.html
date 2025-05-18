@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="{{ page.lang | default: site.lang | default: " en" }}">
+
+{%- include head-retro.html -%}
+
+<body class="gradient-bg {% if page.is_landing %}landing{% else %}page{% endif %}" style="position: relative;">
+
+{%- include header-retro.html -%}
+
+<div class="background-container">
+    <div class="grid-container" style="z-index: 1"></div>
+
+    <div class="jmac-logo-outer">
+        <img src="/assets/img/jmac-kool-logo-1-transparent-sml.png"
+             class="jmac-logo reflection"
+             style="z-index: 0;"
+        />
+    </div>
+    <!--            <div class="decorative-triangle xxx" style="position: absolute; top: 0; left: 0;"></div>-->
+</div>
+
+<div class="foreground-container">
+
+    <div class="jmac-logo-outer">
+        <a href="{% link index.md %}">
+            <img src="/assets/img/jmac-kool-logo-1-transparent-sml.png"
+                 class="jmac-logo original"
+                 style="z-index: 2;"
+            />
+        </a>
+    </div>
+
+    <img src="/assets/img/jmac-scary-cutout-sml.png" class="jmac-scary"/>
+
+    <div class="tagline centered-text" style="z-index: 1; top: 80%">
+        <span class="neon-text-cyan">
+            Full-stack web developer
+        </span>
+        <span class="neon-text-pink flicker-text">
+            &bull;&nbsp;Fun-stacked game developer
+        </span>
+    </div>
+
+</div>
+
+<div class="overlay scanlines"></div>
+
+<div class="main-pane">
+    <div class="post-panel content">
+        {{ content }}
+    </div>
+</div>
+
+{%- include footer-retro.html -%}
+</body>
+
+<script>
+    document.getElementById('img').ondragstart = function() { return false; };
+</script>
+</html>

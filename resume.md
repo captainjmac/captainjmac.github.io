@@ -1,7 +1,8 @@
 ---
-layout: page
+layout: page-retro
 title: CV / Resume
 permalink: /resume/
+body_class: page
 ---
 ![JMac](/assets/img/jmac.jpg){:class="image-wrap-right image-third"}
 

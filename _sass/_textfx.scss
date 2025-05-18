@@ -1,47 +1,51 @@
-:root {
-    --grid-color: #40b5e5;
-    --neon-pink: #ff00ff;
-    --neon-cyan: #00ffff;
-    --neon-purple: #9f00ff;
-    --glow-blur: 10px; /* Control blur intensity */
-    --glow-spread: 3px; /* Control spread intensity */
+/* === Neon Text === */
+@mixin neon-text($color) {
+    color: #fff;
+    text-shadow: 0 0 5px #fff, /* Inner white glow */
+    0 0 var(--glow-blur) $color,
+    0 0 calc(var(--glow-blur) * 1.5) $color,
+    0 0 calc(var(--glow-blur) * 2) $color,
+    0 0 calc(var(--glow-blur) * 3.5) $color;
 }
 
-/* === Neon Text === */
+@mixin flicker() {
+    animation: flicker-text 1.5s infinite alternate;
+}
 .neon-text-pink {
-    color: #fff; /* Base text color - often white or light */
-    text-shadow:
-            0 0 5px #fff, /* Inner white glow */
-            0 0 var(--glow-blur) var(--neon-pink),
-            0 0 calc(var(--glow-blur) * 1.5) var(--neon-pink),
-            0 0 calc(var(--glow-blur) * 2) var(--neon-pink),
-            0 0 calc(var(--glow-blur) * 3.5) var(--neon-pink);
-    animation: flicker-text 1.5s infinite alternate; /* Optional flicker */
+    @include neon-text(var(--neon-pink));
 }
 
 .neon-text-cyan {
-    color: #fff;
-    text-shadow:
-            0 0 5px #fff,
-            0 0 var(--glow-blur) var(--neon-cyan),
-            0 0 calc(var(--glow-blur) * 1.5) var(--neon-cyan),
-            0 0 calc(var(--glow-blur) * 2) var(--neon-cyan),
-            0 0 calc(var(--glow-blur) * 3.5) var(--neon-cyan);
+    @include neon-text(var(--neon-cyan));
+}
+
+.neon-link,
+.neon-link:visited {
+    @include neon-text(var(--neon-cyan));
+
+    transition: all 2s;
+    text-decoration: none;
+
+    &:hover {
+        @include neon-text(v    ar(--neon-pink));
+        @include flicker();
+        text-decoration: none;
+    }
+
 }
 
 .flicker-text {
-    animation: flicker-text 1.5s infinite alternate;
+    @include flicker();
 }
 
 /* Optional Flicker Animation for Text */
 @keyframes flicker-text {
     0%, 18%, 22%, 25%, 53%, 57%, 100% {
-        text-shadow:
-                0 0 4px #fff,
-                0 0 calc(var(--glow-blur) * 0.9) var(--neon-pink), /* Use color variable */
-                0 0 calc(var(--glow-blur) * 1.4) var(--neon-pink),
-                0 0 calc(var(--glow-blur) * 1.9) var(--neon-pink),
-                0 0 calc(var(--glow-blur) * 3.3) var(--neon-pink);
+        text-shadow: 0 0 4px #fff,
+        0 0 calc(var(--glow-blur) * 0.9) var(--neon-pink), /* Use color variable */
+        0 0 calc(var(--glow-blur) * 1.4) var(--neon-pink),
+        0 0 calc(var(--glow-blur) * 1.9) var(--neon-pink),
+        0 0 calc(var(--glow-blur) * 3.3) var(--neon-pink);
         opacity: 1;
     }
     20%, 24%, 55% {
@@ -49,48 +53,43 @@
         opacity: 0.8;
     }
 }
+
 /* Adapt flicker keyframes per color if needed, or use CSS vars inside */
 
 
 /* === Neon Glow for Boxes/Images === */
 .neon-glow-box-purple {
-    box-shadow:
-            0 0 var(--glow-blur) var(--neon-purple),
-            0 0 calc(var(--glow-blur) * 2) var(--neon-purple),
-            inset 0 0 calc(var(--glow-blur) * 0.5) var(--neon-purple); /* Optional inner glow */
+    box-shadow: 0 0 var(--glow-blur) var(--neon-purple),
+    0 0 calc(var(--glow-blur) * 2) var(--neon-purple),
+    inset 0 0 calc(var(--glow-blur) * 0.5) var(--neon-purple); /* Optional inner glow */
     border: 1px solid var(--neon-purple); /* Optional solid border */
     animation: pulse-glow 2s infinite ease-in-out alternate; /* Optional pulsing */
 }
 
 /* Use filter for glow on transparent PNGs or complex shapes */
 .neon-glow-filter-cyan {
-    filter: drop-shadow(0 0 var(--glow-blur) var(--neon-cyan))
-    drop-shadow(0 0 calc(var(--glow-blur) * 2) var(--neon-cyan));
+    filter: drop-shadow(0 0 var(--glow-blur) var(--neon-cyan)) drop-shadow(0 0 calc(var(--glow-blur) * 2) var(--neon-cyan));
     animation: pulse-glow-filter 2.5s infinite ease-in-out alternate;
 }
 
 @keyframes pulse-glow {
     from {
-        box-shadow:
-                0 0 var(--glow-blur) var(--neon-purple), /* Use correct color variable */
-                0 0 calc(var(--glow-blur) * 2) var(--neon-purple),
-                inset 0 0 calc(var(--glow-blur) * 0.5) var(--neon-purple);
+        box-shadow: 0 0 var(--glow-blur) var(--neon-purple), /* Use correct color variable */
+        0 0 calc(var(--glow-blur) * 2) var(--neon-purple),
+        inset 0 0 calc(var(--glow-blur) * 0.5) var(--neon-purple);
     }
     to {
-        box-shadow:
-                0 0 calc(var(--glow-blur) * 1.5) var(--neon-purple),
-                0 0 calc(var(--glow-blur) * 3) var(--neon-purple),
-                inset 0 0 calc(var(--glow-blur) * 0.75) var(--neon-purple);
+        box-shadow: 0 0 calc(var(--glow-blur) * 1.5) var(--neon-purple),
+        0 0 calc(var(--glow-blur) * 3) var(--neon-purple),
+        inset 0 0 calc(var(--glow-blur) * 0.75) var(--neon-purple);
     }
 }
 
 @keyframes pulse-glow-filter {
     from {
-        filter: drop-shadow(0 0 var(--glow-blur) var(--neon-cyan))
-        drop-shadow(0 0 calc(var(--glow-blur) * 2) var(--neon-cyan));
+        filter: drop-shadow(0 0 var(--glow-blur) var(--neon-cyan)) drop-shadow(0 0 calc(var(--glow-blur) * 2) var(--neon-cyan));
     }
     to {
-        filter: drop-shadow(0 0 calc(var(--glow-blur) * 1.5) var(--neon-cyan))
-        drop-shadow(0 0 calc(var(--glow-blur) * 3) var(--neon-cyan));
+        filter: drop-shadow(0 0 calc(var(--glow-blur) * 1.5) var(--neon-cyan)) drop-shadow(0 0 calc(var(--glow-blur) * 3) var(--neon-cyan));
     }
 }

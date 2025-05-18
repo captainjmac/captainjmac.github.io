@@ -6,6 +6,8 @@ categories: crash-twinsanity
 permalink: crash-twinsanity
 ---
 
+My first professional role in the games industry was certainly a baptism of fire! Read on to discover some of the work that was thrown in the bin during the development of Crash Twinsanity... 
+<!--more-->
 The early stages of Crash Twinsanity were fraught with a whole lot of misdirection and indecision. As a result, the first 2.5 years of development were pretty much thrown in the bin as we started again. This page is dedicated to all the poor enemies & NPCs that were cast asunder and forgotten.
 
 ## Small Ant

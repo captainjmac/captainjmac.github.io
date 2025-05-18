@@ -1,8 +1,11 @@
 ---
 ---
-@import 'textfx';
-@import 'layout';
-@import "grid";
-@import "scanlines";
-@import "shapes";
-@import "gradients";
+@use 'bulma/sass/index';
+@use 'main';
+@use 'textfx';
+@use 'layout';
+@use "grid";
+@use "scanlines";
+@use "shapes";
+@use "gradients";
+

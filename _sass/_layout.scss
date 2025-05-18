@@ -1,48 +1,19 @@
-.image-wrap {
-    float: left;
-    margin-right: 20px;
-    margin-bottom: 10px;
-}
-
-.image-wrap-right {
-    float: right;
-    margin-left: 20px;
-    margin-bottom: 10px;
-}
-
-.image-half {
-    max-width: 50%;
-}
-
-.image-40 {
-    max-width: 40%;
-}
-
-.image-third {
-    max-width: 33%;
-}
-
-.image-quarter {
-    max-width: 25%
-}
-
-.image-full {
-    width: 100%;
-}
-
-.centered-text {
+.site-header {
     position: absolute;
-    width: 100%;
-    text-align: center;
-    font-size: 2rem;
+    top: 0;
+    width: 100vw;
+    border:none;
+    z-index: 10;
+
+    .header-links {
+        a {
+            font-size: 1.2rem;
+        }
+    }
 }
 
-// Hack to clear wrapping before each title
-h2:before,
-h3:before {
-    content: "";
-    display: table;
-    clear: both;
+.site-footer {
+    display: none;
 }
 
 .background-container {
@@ -57,25 +28,118 @@ h3:before {
     height: 100vh;
 }
 
-.jmac-logo {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    max-width: 50%;
-    z-index: 2;
+body {
 
-    &.reflection {
-        transform: translate(-50%, 79%) scaleY(-1);
-        z-index: 0;
-        opacity: 0.2;
+    .background-container .jmac-logo-outer {
+        z-index: 1;
+    }
+
+    .foreground-container .jmac-logo-outer {
+        z-index: 2;
+    }
+
+    .jmac-logo-outer {
+        display: block;
+        position: relative;
+        width: 85%;
+        max-width: 50vw;
+        top: 71%;
+        left: 50%;
+        transform: translateX(-50%);
+        transition: all 1s;
+
+        .jmac-logo {
+            display: block;
+            position: relative;
+            width: 100%;
+
+            &.original {
+                z-index: 2;
+                transform: translateY(-100%);
+            }
+
+            &.reflection {
+                z-index: 0;
+                opacity: 0.1;
+
+                transform: translateY(-163%) scaleY(-1);
+            }
+        }
+    }
+
+    .jmac-scary {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        z-index: 1;
+        max-height: 75%;
+        transform: translateY(9%); // Only here because GIMP is shit and not exporting correct image bounds
+        transition: all 1s;
+    }
+
+    .side-pane {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        transition: all 1s;
+    }
+
+    .tagline {
+        transition: 1s all;
+    }
+
+    &.page {
+        .jmac-logo-outer {
+            top: 62%;
+            left: 17%;
+            width: 30%;
+
+            .jmac-logo.reflection {
+                transform: translateY(-255%) scaleY(-1);
+            }
+        }
+        .side-pane {
+            width: 30vw;
+        }
+        .main-pane {
+            transform: translateX(0);
+        }
+        .jmac-scary {
+            opacity: 0;
+        }
+        .tagline {
+            opacity: 0;
+        }
+    }
+
+    .main-pane {
+        position: absolute;
+        top: 6rem;
+        right: 0;
+        width: 70vw;
+        height: calc(100vh - 6rem);
+        transform: translateX(100%);
+        transition: all 1s;
+        z-index: 20;
+    }
+
+    .post-panel {
+        z-index: 20;
+
+        position: relative;
+        margin-top: 0;
+        background-color: rgb(32 33 47 / 89%);
+        margin: 0 2rem 4rem;
+        padding: 2rem;
+        max-height: 84vh;
+        overflow-y: scroll;
+
     }
 }
 
-.jmac-scary {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    z-index: 1;
-    max-height: 75%;
-    transform: translateY(9%); // Only here because GIMP is shit and not exporting correct image bounds
+
+@media(screen and max-width: 540px) {
+
 }
