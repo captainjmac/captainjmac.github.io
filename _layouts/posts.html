@@ -10,20 +10,53 @@ layout: default-retro
     {{ content }}
 
     {%- if site.posts.size > 0 -%}
-<!--    <h2 class="post-list-heading">{{ page.list_title | default: "Posts" }}</h2>-->
+    <!--    <h2 class="post-list-heading">{{ page.list_title | default: "Posts" }}</h2>-->
     <ul class="post-list">
         {%- for post in site.posts -%}
-        <li>
-            {%- assign date_format = site.minima.date_format | default: "%b %-d, %Y" -%}
-            <span class="post-meta">{{ post.date | date: date_format }}</span>
+        <li class="post-list-item">
             <h3>
                 <a class="post-link" href="{{ post.url | relative_url }}">
                     {{ post.title | escape }}
                 </a>
+                <small>
+                    {%- assign date_format = site.minima.date_format | default: "%b %-d, %Y" -%}
+                    <span class="post-meta">
+                        {{ post.date | date: date_format }}
+                    </span>
+                </small>
             </h3>
-            {%- if site.show_excerpts -%}
-                {{ post.excerpt }}
-            {%- endif -%}
+
+            <div class="columns">
+                <div class="column is-one-quarter post-thumbnail">
+                    {% if post.youtube_id %}
+                    <a href="{{ post.url }}">
+                        <img
+                            src="https://img.youtube.com/vi/{{ post.youtube_id }}/maxresdefault.jpg"
+                            alt="Video thumbnail for {{ post.title }}"
+                            loading="lazy"
+                        >
+                    </a>
+                    {% else if post.image %}
+                        <a href="{{ post.url }}">
+                            {% if post.image.path %}
+                            <img src="{{ post.image.path | relative_url }}"
+                                 alt="{{ post.image.alt | default: post.title }}"
+                                 loading="lazy">
+                            {% else %}
+                            <img src="{{ post.image | relative_url }}"
+                                 alt="{{ post.title }}"
+                                 loading="lazy">
+                            {% endif %}
+                        </a>
+                    {% endif %}
+                </div>
+
+                <div class="column post-summary">
+                    {%- if site.show_excerpts -%}
+                    {{ post.excerpt }}
+                    {%- endif -%}
+                </div>
+            </div>
         </li>
         {%- endfor -%}
     </ul>

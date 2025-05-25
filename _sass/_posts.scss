@@ -1,0 +1,23 @@
+.post-list {
+
+    margin-inline-start: 0 !important;
+
+    .post-list-item {
+        list-style: none;
+    }
+
+    h3 {
+        a {
+            color: #f7a7ed;
+        }
+        small span {
+            color: cyan;
+        }
+    }
+
+    .post-thumbnail {
+        a, img {
+            width: 100%;
+        }
+    }
+}

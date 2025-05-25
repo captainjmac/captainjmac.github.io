@@ -4,6 +4,7 @@ title:  "Crash Twinsanity - Deleted Enemies"
 date:   2019-07-02 13:37:00 +0000
 categories: crash-twinsanity
 permalink: crash-twinsanity
+image: /assets/img/Acid-Fly.jpg
 ---
 
 My first professional role in the games industry was certainly a baptism of fire! Read on to discover some of the work that was thrown in the bin during the development of Crash Twinsanity... 
