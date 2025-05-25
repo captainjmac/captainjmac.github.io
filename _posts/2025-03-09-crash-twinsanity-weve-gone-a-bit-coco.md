@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "We've All Gone A Bit Coco"
-date:   2025-04-27 18:00:00 +0000
+date:   2025-03-09 18:00:00 +0000
 categories: crash-twinsanity
 permalink: crash-twinsanity-mysteries-of-the-mecha-bandicoot
 youtube_id: fcjnLqbHFpo
