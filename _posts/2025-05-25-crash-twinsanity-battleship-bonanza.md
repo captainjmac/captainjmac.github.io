@@ -16,6 +16,6 @@ Featuring:
 * Barrels
 * Platypuses
 * Cutting edge AI content generation
-* Anthony Worral Thompson
+* Anthony Worral-Thompson
 
 {% include youtube.html id="bcTOz0IO-Ps" %}

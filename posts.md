@@ -3,4 +3,5 @@ layout: posts
 title: Latest Work
 ---
 
-If I ever do or create anything interesting, or if I emit some random pointless garbage, it will possibly appear in this list.
+If I ever create anything interesting, it will probably appear in this list.<br/>
+If I ever create anything uninteresting it will probably appear here as well.

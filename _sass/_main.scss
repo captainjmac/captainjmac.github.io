@@ -1,55 +1,59 @@
 :root {
-  --grid-color: #40b5e5;
-  --neon-pink: #ff00ff;
-  --neon-cyan: #00ffff;
-  --neon-purple: #9f00ff;
-  --glow-blur: 10px;
-  --glow-spread: 3px;
+    --grid-color: #40b5e5;
+    --neon-pink: #ff00ff;
+    --neon-cyan: #00ffff;
+    --neon-purple: #9f00ff;
+    --glow-blur: 10px;
+    --glow-spread: 3px;
+
+
+    --bulma-body-font-size: 1.3rem !important;
+    --bulma-body-line-height: 1.9rem !important;
 }
 
 .image-wrap {
-  float: left;
-  margin-right: 20px;
-  margin-bottom: 10px;
+    float: left;
+    margin-right: 20px;
+    margin-bottom: 10px;
 }
 
 .image-wrap-right {
-  float: right;
-  margin-left: 20px;
-  margin-bottom: 10px;
+    float: right;
+    margin-left: 20px;
+    margin-bottom: 10px;
 }
 
 .image-half {
-  max-width: 50%;
+    max-width: 50%;
 }
 
 .image-40 {
-  max-width: 40%;
+    max-width: 40%;
 }
 
 .image-third {
-  max-width: 33%;
+    max-width: 33%;
 }
 
 .image-quarter {
-  max-width: 25%
+    max-width: 25%
 }
 
 .image-full {
-  width: 100%;
+    width: 100%;
 }
 
 .centered-text {
-  position: absolute;
-  width: 100%;
-  text-align: center;
-  font-size: 2rem;
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    font-size: 2rem;
 }
 
 // Hack to clear wrapping before each title
 h2:before,
 h3:before {
-  content: "";
-  display: table;
-  clear: both;
+    content: "";
+    display: table;
+    clear: both;
 }

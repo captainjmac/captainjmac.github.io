@@ -16,7 +16,7 @@
         }
     </style>
     {%- feed_meta -%}
-    {%- if jekyll.environment == 'production' and site.google_analytics -21%}
+    {%- if jekyll.environment == 'production' and site.google_analytics -%}
     {%- include google-analytics.html -%}
     {%- endif -%}
 
@@ -26,4 +26,6 @@
         window.cronitor = window.cronitor || function() { (window.cronitor.q = window.cronitor.q || []).push(arguments); };
         cronitor('config', { clientKey: '031069d89e6f2683b6a7713c5a51b7b9' });
     </script>
+
+    {% include external-links.html %}
 </head>
