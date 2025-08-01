@@ -57,3 +57,40 @@ h3:before {
     display: table;
     clear: both;
 }
+
+table {
+    margin-bottom: inherit;
+    width: 100%;
+    text-align: inherit;
+    color: inherit;
+    border: none;
+    border-collapse: collapse;
+
+    tr {
+        &:nth-child(even) {
+            background-color: inherit;
+        }
+    }
+    th, td {
+        padding: inherit;
+    }
+    th {
+        background-color: inherit;
+        border: none;
+    }
+    td {
+        border: none;
+    }
+}
+
+table.credits {
+    width: 780px;
+    tr {
+        td:first-of-type {
+            text-align: right;
+            width: 400px;
+        }
+    }
+
+    margin-bottom: 40px !important;
+}
