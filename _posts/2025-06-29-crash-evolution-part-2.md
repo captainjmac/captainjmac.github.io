@@ -7,7 +7,7 @@ permalink: crash-evolution-part-2
 youtube_id: JJPGyRZRbYk
 ---
 
-TBA
+JMac introduces us to the second part of our look at Crash Evolution from the bridge of his personal Airship.
 <!--more-->
 
 Featuring:

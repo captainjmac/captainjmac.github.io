@@ -161,9 +161,6 @@ This has always bugged me, so I've decided to write out the full unredacted cred
 
 </table>
 
-
-
-
 ### Notable External Staff
 
 <table class="table credits">
