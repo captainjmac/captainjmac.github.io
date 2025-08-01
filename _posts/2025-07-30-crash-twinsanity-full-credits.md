@@ -249,16 +249,16 @@ It's a regular practice in the games industry to exclude people from the credits
     </tr>
 </table>
 
-## Design't deparment
+## Design't department
 ![JMac's Tropy](/assets/img/participation-trophy.jpg){:class="image-40 image-wrap"}
 
 It might be worth going into a bit more detail about the design department, as that is where my role lay, and where a lot of the chaos originated! 
 
 We originally had a fairly large design department when the project was known as Crash Evolution. I was the third designer on the team, with Dax & James being there before me. We were up to 5 people at one point, myself included. After that stage of the project went sour, the original Lead Designer left, followed by 2 others. 
 
-Only Nana and myself remained as the sole designers after the project was rebooted, intially as "Crash Unlimited", and Paul G. became Creative Developer after previously being artist & animator. We tried to hire some more designers but it didn't work out. Nana left soon afterwards, leaving me as the sole remaining person who was hired as a designer, with Paul G as Creative Director. 
+Only Nana and myself remained as the sole designers after the project was rebooted, intially as "Crash Unlimited", and Paul G. became Creative Director after previously being artist & animator. We tried to hire some more designers but it didn't work out. Nana left soon afterwards, leaving me as the sole remaining person who was hired as a designer, with Paul G as Creative Director. 
 
-We never had anyone in the official capacity of Lead Designer after that point, with various aspects of that role either being handled variously by Paul G, Dave R. and myself, or forgotten about entirely! No more attempts were made to hire hire any designers at all. Instead we had 3 programmers, and they covered a lot of the day to day work that would usually be performed by designers. Those were Jon E, Kingley S & Alex W.
+We never had anyone in the official capacity of Lead Designer after that point, with various aspects of that role either being handled variously by Paul G, Dave R. and myself, or forgotten about entirely! No more attempts were made to hire any designers at all. Instead we had 3 programmers, and they covered a lot of the day to day work that would usually be performed by designers. Those were Jon E, Kingsley S & Alex W.
 
 Towards the end of development (3-4 months before release I think), we absorbed a number of members of staff from a local studio which went bust. This was [LTStudios](https://www.mobygames.com/company/4699/ltstudios-ltd/). Neall Jones joined as part of this group, and he became design manager of the next project (Super Monkey Ball Adventure), but wasn't around long enough to assist significantly with the design of Twinsanity
 

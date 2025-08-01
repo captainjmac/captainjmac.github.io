@@ -3,7 +3,7 @@ layout: post
 title:  "Crash Twinsanity - Deleted Enemies"
 date:   2019-07-02 13:37:00 +0000
 categories: crash-twinsanity
-permalink: crash-twinsanity
+permalink: crash-twinsanity-deleted-enemies
 image: /assets/img/Acid-Fly.jpg
 ---
 

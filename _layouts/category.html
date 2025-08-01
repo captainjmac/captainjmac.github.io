@@ -9,9 +9,11 @@ layout: default-retro
 
     {{ content }}
 
-    {%- if site.posts.size > 0 -%}
+    {% assign category_posts = site.posts | where: "categories", "crash-twinsanity" %}
+
+    {%- if category_posts.size > 0 -%}
     <ul class="post-list">
-        {%- for post in site.posts -%}
+        {%- for post in category_posts -%}
         <li class="post-list-item">
             <h3>
                 <a class="post-link" href="{{ post.url | relative_url }}">
@@ -36,17 +38,17 @@ layout: default-retro
                         >
                     </a>
                     {% else if post.image %}
-                        <a href="{{ post.url }}">
-                            {% if post.image.path %}
-                            <img src="{{ post.image.path | relative_url }}"
-                                 alt="{{ post.image.alt | default: post.title }}"
-                                 loading="lazy">
-                            {% else %}
-                            <img src="{{ post.image | relative_url }}"
-                                 alt="{{ post.title }}"
-                                 loading="lazy">
-                            {% endif %}
-                        </a>
+                    <a href="{{ post.url }}">
+                        {% if post.image.path %}
+                        <img src="{{ post.image.path | relative_url }}"
+                            alt="{{ post.image.alt | default: post.title }}"
+                            loading="lazy">
+                        {% else %}
+                        <img src="{{ post.image | relative_url }}"
+                            alt="{{ post.title }}"
+                            loading="lazy">
+                        {% endif %}
+                    </a>
                     {% endif %}
                 </div>
 
