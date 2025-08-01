@@ -225,11 +225,11 @@ It's a regular practice in the games industry to exclude people from the credits
     </tr>
     <tr>
         <td>Animator</td>
-        <td><a href="">Feraz ???</a></td>
+        <td><a href="https://www.mobygames.com/person/57822/faraz-hameed/">Faraz Hameed</a></td>
     </tr>
     <tr>
         <td>Animator</td>
-        <td><a href="">Terry ???</a></td>
+        <td><a href="https://www.mobygames.com/person/162082/terry-bannon/">Terry Bannon</a></td>
     </tr>
     <tr>
         <td>Lead Designer</td>
@@ -246,6 +246,10 @@ It's a regular practice in the games industry to exclude people from the credits
     <tr>
         <td>Designer</td>
         <td><a href="https://www.mobygames.com/person/86467/nana-louise-nielsen/">Nana Louise Nielsen</a></td>
+    </tr>
+    <tr>
+        <td>Designer</td>
+        <td><a href="">Gillian (???)</a></td>
     </tr>
 </table>
 
