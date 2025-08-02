@@ -44,6 +44,10 @@ This has always bugged me, so I've decided to write out the full unredacted cred
         <td>QA Manager / Scripter</td>
         <td><a href="https://www.mobygames.com/person/38201/neall-jones/">Neall Jones</a></td>
     </tr>
+    <tr>
+        <td>Producer </td>
+        <td><a href="https://www.mobygames.com/person/30907/richard-baxter/">Richard Baxter</a></td>
+    </tr>    
 </table>
 
 #### Art
@@ -107,7 +111,7 @@ This has always bugged me, so I've decided to write out the full unredacted cred
         <td><a href="https://www.mobygames.com/person/69294/andrew-tate/">Andrew Tate</a></td>
     </tr>  
     <tr>
-        <td>Tools Programmer</td>
+        <td>Programmer</td>
         <td><a href="https://www.mobygames.com/person/312468/matthew-lewis/">Matthew Lewis</a></td>
     </tr>    
     <tr>
@@ -119,11 +123,11 @@ This has always bugged me, so I've decided to write out the full unredacted cred
         <td><a href="https://www.mobygames.com/person/163423/nic-ho-chee/">Nic Ho Chee</a></td>
     </tr>      
     <tr>
-        <td>Physics Programmer</td>
+        <td>Programmer / Physics</td>
         <td><a href="https://www.mobygames.com/person/175077/kazimir-wanelik/">Kazimir Wanelik</a></td>
     </tr>      
     <tr>
-        <td>Physics Programmer</td>
+        <td>Game / Physics Programmer</td>
         <td><a href="https://www.mobygames.com/person/145564/kevin-pimm/">Kevin Pimm</a></td>
     </tr>        
     <tr>
@@ -143,17 +147,13 @@ This has always bugged me, so I've decided to write out the full unredacted cred
         <td><a href="https://www.mobygames.com/person/175078/alex-waterston/">Alex Waterston</a></td>
     </tr>  
     <tr>
-        <td>Programmer</td>
+        <td>Programmer / Sound</td>
         <td><a href="https://www.mobygames.com/person/516647/david-pollard/">David Pollard</a></td>
     </tr>    
     <tr>
-        <td>Programmer</td>
+        <td>Programmer / Cutscenes</td>
         <td><a href="https://www.mobygames.com/person/288521/parvindar-singh/">Parvindar Singh</a></td>
-    </tr>    
-    <tr>
-        <td>Programmer</td>
-        <td><a href="https://www.mobygames.com/person/30907/richard-baxter/">Richard Baxter</a></td>
-    </tr>    
+    </tr>
     <tr>
         <td>Programmer</td>
         <td><a href="https://www.mobygames.com/person/253056/scott-evans/">Scott Evans</a></td>
@@ -171,6 +171,10 @@ This has always bugged me, so I've decided to write out the full unredacted cred
     <tr>
         <td>External Producer</td>
         <td><a href="https://www.mobygames.com/person/53626/caroline-trujillo/">Caroline Trujillo</a></td>
+    </tr>
+<tr>
+        <td>External Producer</td>
+        <td><a href="https://www.mobygames.com/person/53626/caroline-trujillo/">Chris Wilson</a></td>
     </tr>
     <tr>
         <td>Creative Consultant</td>
