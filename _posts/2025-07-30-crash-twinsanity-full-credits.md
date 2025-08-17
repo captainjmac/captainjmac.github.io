@@ -220,7 +220,7 @@ It's a regular practice in the games industry to exclude people from the credits
         <td><a href="https://www.mobygames.com/person/236303/richard-albon/">Richard Albon</a></td>
     </tr>
     <tr>
-        <td>Concept Artist</td>
+        <td>Concept Artist (Crash Evolution & Earlier)</td>
         <td><a href="https://www.mobygames.com/person/273428/duke-mighten/">Duke Mighten</a></td>
     </tr> 
     <tr>
@@ -236,15 +236,15 @@ It's a regular practice in the games industry to exclude people from the credits
         <td><a href="https://www.mobygames.com/person/162082/terry-bannon/">Terry Bannon</a></td>
     </tr>
     <tr>
-        <td>Lead Designer</td>
+        <td>Lead Designer (Crash Evolution)</td>
         <td><a href="https://www.mobygames.com/person/120757/dax-ginn/">Dax Ginn</a></td>
     </tr>
     <tr>
-        <td>Senior Designer</td>
+        <td>Senior Designer (Crash Evolution)</td>
         <td><a href="https://www.mobygames.com/person/772696/james-charlesworth/">James Charlesworth</a></td>
     </tr>
     <tr>
-        <td>Designer</td>
+        <td>Designer (Crash Evolution)</td>
         <td><a href="https://www.mobygames.com/person/177381/amanda-jeffrey/">Amanda Jeffrey</a></td>
     </tr>
     <tr>
