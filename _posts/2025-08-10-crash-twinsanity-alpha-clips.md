@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "Crash Twinsanity - Lost alpha gameplay clips
+title:  "Crash Twinsanity - Lost alpha gameplay clips"
 date:   2025-08-10 10:00:00 +0000
 categories: crash-twinsanity
 permalink: crash-twinsanity-alpha-clips
