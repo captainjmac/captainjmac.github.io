@@ -1,12 +1,18 @@
-import { useState } from 'react';
-import type { Video, VideoStatus } from '../../types';
+import {useState} from 'react';
+import type {Video, VideoStatus} from '@/types';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {usePlaylistsContext} from "@/hooks/PlaylistsContext.tsx";
 
 interface VideoCardProps {
   video: Video;
   isPlaying: boolean;
-  onSelect: () => void;
-  onUpdate: (updates: Partial<Video>) => void;
-  onDelete: () => void;
   onShowDetail: () => void;
 }
 
@@ -25,38 +31,49 @@ const statusLabels: Record<VideoStatus, string> = {
 export function VideoCard({
   video,
   isPlaying,
-  onSelect,
-  onUpdate,
-  onDelete,
   onShowDetail,
 }: VideoCardProps) {
-  const [showMenu, setShowMenu] = useState(false);
+
+  const {
+    activePlaylist,
+    setCurrentVideo,
+    updateVideo,
+    deleteVideo,
+  } = usePlaylistsContext();
+
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(video.title);
 
+  if (!activePlaylist) {
+    return null;
+  }
+
   const handleSaveTitle = () => {
     if (editTitle.trim() && editTitle !== video.title) {
-      onUpdate({ title: editTitle.trim() });
+      handleUpdate({title: editTitle.trim()});
     }
     setIsEditing(false);
   };
 
   const handleStatusChange = (status: VideoStatus) => {
-    onUpdate({ status });
-    setShowMenu(false);
+    handleUpdate({status});
   };
+
+  const handleUpdate = (updates: Partial<Video>) => {
+    updateVideo(activePlaylist.id, video.id, updates);
+  }
 
   return (
     <div
-      className={`flex gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+      className={`flex gap-3 p-2 rounded-lg cursor-pointer transition-all min-w-0 overflow-hidden ${
         isPlaying
           ? 'bg-blue-600/20 ring-2 ring-blue-500'
           : 'bg-gray-800 hover:bg-gray-750'
       }`}
-      onClick={onSelect}
+      onClick={() => setCurrentVideo(video.id)}
     >
       {/* Thumbnail */}
-      <div className="relative flex-shrink-0 w-32 aspect-video rounded overflow-hidden bg-gray-700">
+      <div className="relative flex-shrink-0 w-16 aspect-video rounded overflow-hidden bg-gray-700">
         <img
           src={video.thumbnail}
           alt={video.title}
@@ -72,7 +89,7 @@ export function VideoCard({
         {isPlaying && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
             <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
+              <path d="M8 5v14l11-7z"/>
             </svg>
           </div>
         )}
@@ -110,11 +127,11 @@ export function VideoCard({
               video.status === 'completed'
                 ? 'bg-green-500/20 text-green-400'
                 : video.status === 'in_progress'
-                ? 'bg-yellow-500/20 text-yellow-400'
-                : 'bg-gray-500/20 text-gray-400'
+                  ? 'bg-yellow-500/20 text-yellow-400'
+                  : 'bg-gray-500/20 text-gray-400'
             }`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${statusColors[video.status]}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${statusColors[video.status]}`}/>
             {statusLabels[video.status]}
           </span>
 
@@ -129,84 +146,47 @@ export function VideoCard({
       </div>
 
       {/* Menu */}
-      <div className="relative flex-shrink-0">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowMenu(!showMenu);
-          }}
-          className="p-1 rounded hover:bg-gray-600 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-          </svg>
-        </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+          <button className="p-1 rounded hover:bg-gray-600 transition-colors flex-shrink-0">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
+            </svg>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[160px]">
+          <DropdownMenuItem onClick={onShowDetail}>
+            Details & Notes
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setIsEditing(true)}>
+            Edit title
+          </DropdownMenuItem>
 
-        {showMenu && (
-          <>
-            <div
-              className="fixed inset-0 z-10"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMenu(false);
-              }}
-            />
-            <div className="absolute right-0 top-full mt-1 z-20 bg-gray-700 rounded shadow-lg py-1 min-w-[140px]">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                  onShowDetail();
-                }}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-600"
-              >
-                Details & Notes
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                  setIsEditing(true);
-                }}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-600"
-              >
-                Edit title
-              </button>
+          <DropdownMenuSeparator/>
+          <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+            Mark as
+          </DropdownMenuLabel>
 
-              <div className="border-t border-gray-600 my-1" />
-              <div className="px-3 py-1 text-xs text-gray-400">Mark as</div>
+          {(['unwatched', 'in_progress', 'completed'] as VideoStatus[]).map((status) => (
+            <DropdownMenuItem
+              key={status}
+              onClick={() => handleStatusChange(status)}
+              className={video.status === status ? 'text-blue-400' : ''}
+            >
+              <span className={`w-2 h-2 rounded-full ${statusColors[status]}`}/>
+              {statusLabels[status]}
+            </DropdownMenuItem>
+          ))}
 
-              {(['unwatched', 'in_progress', 'completed'] as VideoStatus[]).map((status) => (
-                <button
-                  key={status}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleStatusChange(status);
-                  }}
-                  className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-600 flex items-center gap-2 ${
-                    video.status === status ? 'text-blue-400' : ''
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${statusColors[status]}`} />
-                  {statusLabels[status]}
-                </button>
-              ))}
-
-              <div className="border-t border-gray-600 my-1" />
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                  onDelete();
-                }}
-                className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-gray-600"
-              >
-                Delete
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+          <DropdownMenuSeparator/>
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => deleteVideo(activePlaylist.id, video.id)}
+          >
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

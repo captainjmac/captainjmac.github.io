@@ -11,6 +11,7 @@ export interface Video {
   progress: number;     // Seconds watched
   addedAt: number;      // Timestamp
   uploadDate?: string;  // YouTube upload date (ISO string)
+  description?: string; // YouTube video description
 }
 
 export interface Playlist {

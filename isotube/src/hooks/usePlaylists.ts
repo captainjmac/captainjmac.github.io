@@ -1,6 +1,7 @@
 import {useCallback} from 'react';
+import {produce} from 'immer';
 import {useLocalStorage} from './useLocalStorage';
-import type {Playlist, Video, VideoStatus, AppState} from '../types';
+import type {Playlist, Video, VideoStatus, AppState} from '@/types';
 
 const generateId = () => crypto.randomUUID();
 
@@ -27,108 +28,86 @@ export function usePlaylists() {
             videos: [],
             createdAt: Date.now(),
         };
-        setState(prev => ({
-            ...prev,
-            playlists: [...prev.playlists, newPlaylist],
-            activePlaylistId: prev.activePlaylistId ?? newPlaylist.id,
+        setState(produce(draft => {
+            draft.playlists.push(newPlaylist);
+            draft.activePlaylistId ??= newPlaylist.id;
         }));
         return newPlaylist.id;
     }, [setState]);
 
     const renamePlaylist = useCallback((id: string, name: string) => {
-        setState(prev => ({
-            ...prev,
-            playlists: prev.playlists.map(p =>
-                p.id === id ? {...p, name} : p
-            ),
+        setState(produce(draft => {
+            const playlist = draft.playlists.find(p => p.id === id);
+            if (playlist) playlist.name = name;
         }));
     }, [setState]);
 
     const deletePlaylist = useCallback((id: string) => {
-        setState(prev => {
-            const newPlaylists = prev.playlists.filter(p => p.id !== id);
-            return {
-                ...prev,
-                playlists: newPlaylists,
-                activePlaylistId: prev.activePlaylistId === id
-                    ? (newPlaylists[0]?.id ?? null)
-                    : prev.activePlaylistId,
-                currentVideoId: prev.activePlaylistId === id ? null : prev.currentVideoId,
-            };
-        });
+        setState(produce(draft => {
+            const index = draft.playlists.findIndex(p => p.id === id);
+            if (index === -1) return;
+
+            draft.playlists.splice(index, 1);
+
+            if (draft.activePlaylistId === id) {
+                draft.activePlaylistId = draft.playlists[0]?.id ?? null;
+                draft.currentVideoId = null;
+            }
+        }));
     }, [setState]);
 
     const setActivePlaylist = useCallback((id: string | null) => {
-        setState(prev => ({
-            ...prev,
-            activePlaylistId: id,
-            currentVideoId: null,
+        setState(produce(draft => {
+            draft.activePlaylistId = id;
+            draft.currentVideoId = null;
         }));
     }, [setState]);
 
     // Video CRUD
-    const addVideo = useCallback((playlistId: string|null, video: Omit<Video, 'addedAt'>) => {
-            const newVideo: Video = {
-                ...video,
-                addedAt: Date.now(),
-            };
-            setState(prev => ({
-                ...prev,
-                playlists: prev.playlists.map(p =>
-                    p.id === playlistId
-                        ? {...p, videos: [...p.videos, newVideo]}
-                        : p
-                ),
-            }));
+    const addVideo = useCallback((playlistId: string | null, video: Omit<Video, 'addedAt'>) => {
+        const newVideo: Video = {
+            ...video,
+            addedAt: Date.now(),
+        };
+        setState(produce(draft => {
+            const playlist = draft.playlists.find(p => p.id === playlistId);
+            if (playlist) playlist.videos.push(newVideo);
+        }));
     }, [setState]);
 
     const updateVideo = useCallback((playlistId: string | null, videoId: string, updates: Partial<Video>) => {
-        setState(prev => ({
-            ...prev,
-            playlists: prev.playlists.map(p =>
-                p.id === playlistId
-                    ? {
-                        ...p,
-                        videos: p.videos.map(v =>
-                            v.id === videoId ? {...v, ...updates} : v
-                        ),
-                    }
-                    : p
-            ),
+        setState(produce(draft => {
+            const playlist = draft.playlists.find(p => p.id === playlistId);
+            const video = playlist?.videos.find(v => v.id === videoId);
+            if (video) Object.assign(video, updates);
         }));
     }, [setState]);
 
     const deleteVideo = useCallback((playlistId: string | null, videoId: string) => {
-        setState(prev => ({
-            ...prev,
-            playlists: prev.playlists.map(p =>
-                p.id === playlistId
-                    ? {...p, videos: p.videos.filter(v => v.id !== videoId)}
-                    : p
-            ),
-            currentVideoId: prev.currentVideoId === videoId ? null : prev.currentVideoId,
+        setState(produce(draft => {
+            const playlist = draft.playlists.find(p => p.id === playlistId);
+            if (playlist) {
+                const index = playlist.videos.findIndex(v => v.id === videoId);
+                if (index !== -1) playlist.videos.splice(index, 1);
+            }
+            if (draft.currentVideoId === videoId) {
+                draft.currentVideoId = null;
+            }
         }));
     }, [setState]);
 
     const moveVideo = useCallback((fromPlaylistId: string, toPlaylistId: string, videoId: string) => {
-        setState(prev => {
-            const fromPlaylist = prev.playlists.find(p => p.id === fromPlaylistId);
-            const video = fromPlaylist?.videos.find(v => v.id === videoId);
-            if (!video) return prev;
+        setState(produce(draft => {
+            const fromPlaylist = draft.playlists.find(p => p.id === fromPlaylistId);
+            const toPlaylist = draft.playlists.find(p => p.id === toPlaylistId);
+            if (!fromPlaylist || !toPlaylist) return;
 
-            return {
-                ...prev,
-                playlists: prev.playlists.map(p => {
-                    if (p.id === fromPlaylistId) {
-                        return {...p, videos: p.videos.filter(v => v.id !== videoId)};
-                    }
-                    if (p.id === toPlaylistId) {
-                        return {...p, videos: [...p.videos, video]};
-                    }
-                    return p;
-                }),
-            };
-        });
+            const videoIndex = fromPlaylist.videos.findIndex(v => v.id === videoId);
+            if (videoIndex === -1) return;
+
+            const [video] = fromPlaylist.videos.splice(videoIndex, 1);
+            toPlaylist.videos.push(video);
+        }));
     }, [setState]);
 
     // Video status/progress helpers
@@ -153,9 +132,8 @@ export function usePlaylists() {
 
     // Player controls
     const setCurrentVideo = useCallback((videoId: string | null) => {
-        setState(prev => ({
-            ...prev,
-            currentVideoId: videoId,
+        setState(produce(draft => {
+            draft.currentVideoId = videoId;
         }));
     }, [setState]);
 
@@ -176,6 +154,15 @@ export function usePlaylists() {
             setCurrentVideo(prevVideo.id);
         }
     }, [activePlaylist, state.currentVideoId, setCurrentVideo]);
+
+    // Import/export state
+    const importState = useCallback((newState: AppState) => {
+        setState(newState);
+    }, [setState]);
+
+    const exportState = useCallback((): AppState => {
+        return state;
+    }, [state]);
 
     return {
         // State
@@ -207,5 +194,9 @@ export function usePlaylists() {
         setCurrentVideo,
         playNext,
         playPrevious,
+
+        // Import/export
+        importState,
+        exportState,
     };
 }
