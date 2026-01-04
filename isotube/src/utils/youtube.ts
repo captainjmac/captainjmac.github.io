@@ -186,3 +186,168 @@ export async function createVideoFromUrl(url: string): Promise<Video | null> {
     addedAt: Date.now(),
   };
 }
+
+// ============================================
+// YouTube Playlist Functions
+// ============================================
+
+/**
+ * Extract YouTube playlist ID from various URL formats:
+ * - https://www.youtube.com/playlist?list=PLAYLIST_ID
+ * - https://youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID
+ */
+export function extractPlaylistId(url: string): string | null {
+    const match = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+    return match ? match[1] : null;
+}
+
+/**
+ * Check if a URL contains a playlist reference
+ */
+export function isPlaylistUrl(url: string): boolean {
+    return extractPlaylistId(url) !== null;
+}
+
+export interface PlaylistMetadata {
+    id: string;
+    title: string;
+    description: string;
+    thumbnailUrl: string;
+    itemCount: number;
+}
+
+interface PlaylistItem {
+    videoId: string;
+    title: string;
+    thumbnail: string;
+    description: string;
+    publishedAt: string;
+    position: number;
+}
+
+export interface PlaylistImportResult {
+    metadata: PlaylistMetadata;
+    videos: Omit<Video, 'addedAt'>[];
+}
+
+/**
+ * Fetch playlist metadata (title, description) from YouTube Data API v3
+ */
+export async function fetchPlaylistMetadata(playlistId: string): Promise<PlaylistMetadata | null> {
+    const url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&id=${playlistId}&key=${YOUTUBE_API_KEY}`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.error('Failed to fetch playlist metadata:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        const item = data.items?.[0];
+        if (!item) {
+            return null;
+        }
+
+        return {
+            id: playlistId,
+            title: item.snippet.title,
+            description: item.snippet.description,
+            thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? '',
+            itemCount: item.contentDetails.itemCount,
+        };
+    } catch (error) {
+        console.error('Error fetching playlist metadata:', error);
+        return null;
+    }
+}
+
+/**
+ * Fetch all videos in a playlist, handling pagination
+ * Returns videos in playlist order
+ */
+export async function fetchPlaylistVideos(playlistId: string): Promise<PlaylistItem[]> {
+    const allItems: PlaylistItem[] = [];
+    let pageToken: string | undefined = undefined;
+
+    do {
+        const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+        url.searchParams.set('part', 'snippet');
+        url.searchParams.set('playlistId', playlistId);
+        url.searchParams.set('maxResults', '50');
+        url.searchParams.set('key', YOUTUBE_API_KEY);
+        if (pageToken) {
+            url.searchParams.set('pageToken', pageToken);
+        }
+
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+            throw new Error(`Failed to fetch playlist items: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        for (const item of data.items ?? []) {
+            // Skip deleted/private videos (they have no videoId)
+            const videoId = item.snippet?.resourceId?.videoId;
+            if (!videoId) continue;
+
+            allItems.push({
+                videoId,
+                title: item.snippet.title,
+                thumbnail: item.snippet.thumbnails?.medium?.url ?? getThumbnailUrl(videoId, 'medium'),
+                description: item.snippet.description,
+                publishedAt: item.snippet.publishedAt,
+                position: item.snippet.position,
+            });
+        }
+
+        pageToken = data.nextPageToken;
+    } while (pageToken);
+
+    // Sort by position to maintain playlist order
+    return allItems.sort((a, b) => a.position - b.position);
+}
+
+/**
+ * Convert playlist items to Video objects for import
+ */
+function playlistItemsToVideos(items: PlaylistItem[]): Omit<Video, 'addedAt'>[] {
+    return items.map(item => ({
+        id: item.videoId,
+        url: buildYouTubeUrl(item.videoId),
+        title: item.title,
+        thumbnail: item.thumbnail,
+        notes: '',
+        rating: 0,
+        status: 'unwatched' as const,
+        progress: 0,
+        uploadDate: item.publishedAt,
+        description: item.description,
+    }));
+}
+
+/**
+ * Fetch complete playlist data for import
+ * Returns playlist metadata and all videos ready for import
+ */
+export async function fetchPlaylistForImport(url: string): Promise<PlaylistImportResult | null> {
+    const playlistId = extractPlaylistId(url);
+    if (!playlistId) {
+        return null;
+    }
+
+    const [metadata, items] = await Promise.all([
+        fetchPlaylistMetadata(playlistId),
+        fetchPlaylistVideos(playlistId),
+    ]);
+
+    if (!metadata) {
+        return null;
+    }
+
+    return {
+        metadata,
+        videos: playlistItemsToVideos(items),
+    };
+}

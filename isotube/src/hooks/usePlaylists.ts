@@ -110,6 +110,42 @@ export function usePlaylists() {
         }));
     }, [setState]);
 
+    // Add multiple videos at once, skipping duplicates
+    const addVideos = useCallback((playlistId: string | null, videos: Omit<Video, 'addedAt'>[]) => {
+        setState(produce(draft => {
+            const playlist = draft.playlists.find(p => p.id === playlistId);
+            if (playlist) {
+                const existingIds = new Set(playlist.videos.map(v => v.id));
+                const newVideos = videos
+                    .filter(v => !existingIds.has(v.id))
+                    .map((video, index) => ({
+                        ...video,
+                        addedAt: Date.now() + index,
+                    }));
+                playlist.videos.push(...newVideos);
+            }
+        }));
+    }, [setState]);
+
+    // Create a new playlist pre-populated with videos
+    const createPlaylistWithVideos = useCallback((name: string, videos: Omit<Video, 'addedAt'>[]) => {
+        const newPlaylistId = generateId();
+        const newPlaylist: Playlist = {
+            id: newPlaylistId,
+            name,
+            videos: videos.map((video, index) => ({
+                ...video,
+                addedAt: Date.now() + index,
+            })),
+            createdAt: Date.now(),
+        };
+        setState(produce(draft => {
+            draft.playlists.push(newPlaylist);
+            draft.activePlaylistId = newPlaylistId;
+        }));
+        return newPlaylistId;
+    }, [setState]);
+
     // Video status/progress helpers
     const setVideoStatus = useCallback((playlistId: string, videoId: string, status: VideoStatus) => {
         updateVideo(playlistId, videoId, {status});
@@ -180,9 +216,11 @@ export function usePlaylists() {
 
         // Video operations
         addVideo,
+        addVideos,
         updateVideo,
         deleteVideo,
         moveVideo,
+        createPlaylistWithVideos,
 
         // Video helpers
         setVideoStatus,

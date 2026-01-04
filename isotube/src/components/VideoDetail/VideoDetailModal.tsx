@@ -56,7 +56,6 @@ export function VideoDetailModal(
         <VideoDetail
           video={video}
           onUpdate={onUpdate}
-          onClose={onClose}
         />
 
       </div>

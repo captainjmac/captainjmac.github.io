@@ -24,10 +24,13 @@ const statusOrder: Record<VideoStatus, number> = {
 export function VideoList({}: VideoListProps) {
 
   const {
+    playlists,
     activePlaylist,
     currentVideo,
     addVideo,
+    addVideos,
     updateVideo,
+    createPlaylistWithVideos,
   } = usePlaylistsContext();
 
   const [sortBy, setSortBy] = useState<SortOption>('added');
@@ -91,7 +94,13 @@ export function VideoList({}: VideoListProps) {
     <div className="flex-1 flex flex-col overflow-hidden">
 
       <div className="p-4 border-b border-gray-700">
-        <AddVideoForm onAddVideo={(video) => addVideo(activePlaylist.id, video)}/>
+        <AddVideoForm
+          onAddVideo={(video) => addVideo(activePlaylist.id, video)}
+          onAddVideos={addVideos}
+          onCreatePlaylistWithVideos={createPlaylistWithVideos}
+          existingPlaylists={playlists}
+          currentPlaylistId={activePlaylist.id}
+        />
       </div>
 
       {playlist.videos.length > 0 && (

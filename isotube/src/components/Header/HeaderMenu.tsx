@@ -61,7 +61,7 @@ export function HeaderMenu() {
     };
 
     return (
-        <div className="ml-auto">
+        <div>
             <input
                 ref={fileInputRef}
                 type="file"

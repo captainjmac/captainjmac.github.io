@@ -8,6 +8,7 @@ import {PlaylistList} from "./components/Sidebar/PlaylistList.tsx";
 import {Logo} from "./components/common/icons/Logo.tsx";
 import {HeaderMenu} from "@/components/Header/HeaderMenu.tsx";
 import {VideoDetailSummary} from "@/components/VideoDetail/VideoDetailSummary.tsx";
+import {HelpDialog} from "@/components/Header/HelpDialog.tsx";
 
 function App() {
   const {
@@ -51,7 +52,8 @@ function App() {
   });
 
   return (
-    <div className="dark h-screen bg-gray-900 text-white grid grid-cols-1 grid-rows-[auto_1fr_auto] lg:grid-cols-[24rem_1fr] lg:grid-rows-[auto_1fr]">
+    <div
+      className="dark h-screen bg-gray-900 text-white grid grid-cols-1 grid-rows-[auto_1fr_auto] lg:grid-cols-[24rem_1fr] lg:grid-rows-[auto_1fr]">
       {/* Header - spans full width */}
       <header className="col-span-full flex items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700">
         <Logo/>
@@ -61,7 +63,10 @@ function App() {
             Watch YouTube videos without the distraction
           </small>
         </h1>
-        <HeaderMenu/>
+        <div className="ml-auto flex items-center gap-1">
+          <HelpDialog/>
+          <HeaderMenu/>
+        </div>
       </header>
 
       {/* Left column: Playlists + Videos stacked (desktop only) */}
