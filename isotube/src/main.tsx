@@ -5,9 +5,9 @@ import App from './App.tsx'
 import {PlaylistsProvider} from './hooks/PlaylistsContext'
 
 createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-        <PlaylistsProvider>
-            <App/>
-        </PlaylistsProvider>
-    </StrictMode>,
+  <StrictMode>
+    <PlaylistsProvider>
+      <App/>
+    </PlaylistsProvider>
+  </StrictMode>,
 )
