@@ -5,6 +5,8 @@ import {Sidebar} from './components/Sidebar/Sidebar';
 import {VideoList} from './components/VideoList/VideoList';
 import {Player, type PlayerHandle} from './components/Player/Player';
 import {PlaylistList} from "./components/Sidebar/PlaylistList.tsx";
+import {SubscriptionList} from "./components/Sidebar/SubscriptionList.tsx";
+import {SidebarTabs} from "./components/Sidebar/SidebarTabs.tsx";
 import {Logo} from "./components/common/icons/Logo.tsx";
 import {HeaderMenu} from "@/components/Header/HeaderMenu.tsx";
 import {VideoDetailSummary} from "@/components/VideoDetail/VideoDetailSummary.tsx";
@@ -19,6 +21,10 @@ function App() {
     setVideoStatus,
     playNext,
     playPrevious,
+    sidebarView,
+    setSidebarView,
+    userPlaylists,
+    subscriptions,
   } = usePlaylistsContext();
 
   const [autoAdvance, setAutoAdvance] = useState(true);
@@ -71,12 +77,33 @@ function App() {
 
       {/* Left column: Playlists + Videos stacked (desktop only) */}
       <Sidebar className="hidden lg:flex">
-        <PlaylistList/>
+        <SidebarTabs
+          activeTab={sidebarView}
+          onTabChange={setSidebarView}
+          playlistCount={userPlaylists.length}
+          subscriptionCount={subscriptions.length}
+        />
+        {sidebarView === 'playlists' ? (
+          <PlaylistList/>
+        ) : (
+          <SubscriptionList/>
+        )}
         <VideoList/>
       </Sidebar>
 
       {/* Video list - below player on mobile only */}
       <section className="lg:hidden row-start-3 bg-gray-800 overflow-y-auto">
+        <SidebarTabs
+          activeTab={sidebarView}
+          onTabChange={setSidebarView}
+          playlistCount={userPlaylists.length}
+          subscriptionCount={subscriptions.length}
+        />
+        {sidebarView === 'playlists' ? (
+          <PlaylistList/>
+        ) : (
+          <SubscriptionList/>
+        )}
         <VideoList/>
       </section>
 

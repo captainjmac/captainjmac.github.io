@@ -31,6 +31,7 @@ export function VideoList({}: VideoListProps) {
     addVideos,
     updateVideo,
     createPlaylistWithVideos,
+    createSubscription,
   } = usePlaylistsContext();
 
   const [sortBy, setSortBy] = useState<SortOption>('added');
@@ -98,6 +99,7 @@ export function VideoList({}: VideoListProps) {
           onAddVideo={(video) => addVideo(activePlaylist.id, video)}
           onAddVideos={addVideos}
           onCreatePlaylistWithVideos={createPlaylistWithVideos}
+          onCreateSubscription={(channelData) => createSubscription(channelData.metadata, channelData.videos)}
           existingPlaylists={playlists}
           currentPlaylistId={activePlaylist.id}
         />

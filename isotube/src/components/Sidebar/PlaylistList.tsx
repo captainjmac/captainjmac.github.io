@@ -4,7 +4,7 @@ import {PlaylistItem} from './PlaylistItem';
 
 export function PlaylistList() {
   const {
-    playlists,
+    userPlaylists,
     activePlaylistId,
     setActivePlaylist,
     createPlaylist,
@@ -16,7 +16,7 @@ export function PlaylistList() {
   const [isCreating, setIsCreating] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
 
-  const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
+  const activePlaylist = userPlaylists.find((p) => p.id === activePlaylistId);
 
   const handleCreate = () => {
     if (newPlaylistName.trim()) {
@@ -128,7 +128,7 @@ export function PlaylistList() {
           )}
 
           {/* Playlist list */}
-          {playlists.length === 0 && !isCreating ? (
+          {userPlaylists.length === 0 && !isCreating ? (
             <p className="text-gray-500 text-sm px-2 py-4 text-center">
               No playlists yet.
               <br/>
@@ -141,7 +141,7 @@ export function PlaylistList() {
             </p>
           ) : (
             <div className="space-y-1">
-              {playlists.map((playlist) => (
+              {userPlaylists.map((playlist) => (
                 <PlaylistItem
                   key={playlist.id}
                   playlist={playlist}

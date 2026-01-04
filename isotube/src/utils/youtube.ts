@@ -351,3 +351,271 @@ export async function fetchPlaylistForImport(url: string): Promise<PlaylistImpor
         videos: playlistItemsToVideos(items),
     };
 }
+
+// ============================================
+// YouTube Channel Functions
+// ============================================
+
+export interface ChannelIdentifier {
+    type: 'id' | 'handle' | 'user' | 'custom';
+    value: string;
+}
+
+/**
+ * Extract channel identifier from various YouTube channel URL formats:
+ * - youtube.com/channel/UCxxxxxxx (channel ID)
+ * - youtube.com/@handle
+ * - youtube.com/user/username
+ * - youtube.com/c/customname
+ */
+export function extractChannelIdentifier(url: string): ChannelIdentifier | null {
+    const patterns: Array<{ regex: RegExp; type: ChannelIdentifier['type'] }> = [
+        { regex: /youtube\.com\/channel\/([a-zA-Z0-9_-]+)/, type: 'id' },
+        { regex: /youtube\.com\/@([a-zA-Z0-9_.-]+)/, type: 'handle' },
+        { regex: /youtube\.com\/user\/([a-zA-Z0-9_-]+)/, type: 'user' },
+        { regex: /youtube\.com\/c\/([a-zA-Z0-9_-]+)/, type: 'custom' },
+    ];
+
+    for (const { regex, type } of patterns) {
+        const match = url.match(regex);
+        if (match) {
+            return { type, value: match[1] };
+        }
+    }
+    return null;
+}
+
+/**
+ * Check if a URL is a YouTube channel URL
+ */
+export function isChannelUrl(url: string): boolean {
+    return extractChannelIdentifier(url) !== null;
+}
+
+export interface ChannelMetadata {
+    id: string;              // YouTube channel ID (UC...)
+    title: string;           // Channel name
+    description: string;
+    thumbnail: string;       // Avatar URL
+    uploadsPlaylistId: string;  // Uploads playlist (UU...)
+}
+
+interface YouTubeChannelAPIResponse {
+    items?: Array<{
+        id: string;
+        snippet: {
+            title: string;
+            description: string;
+            thumbnails: {
+                default?: { url: string };
+                medium?: { url: string };
+                high?: { url: string };
+            };
+        };
+        contentDetails: {
+            relatedPlaylists: {
+                uploads: string;
+            };
+        };
+    }>;
+}
+
+interface YouTubeSearchAPIResponse {
+    items?: Array<{
+        id: {
+            kind: string;
+            channelId: string;
+        };
+        snippet: {
+            channelId: string;
+            title: string;
+            description: string;
+            thumbnails: {
+                default?: { url: string };
+                medium?: { url: string };
+            };
+        };
+    }>;
+}
+
+/**
+ * Fetch channel metadata by channel ID
+ */
+async function fetchChannelById(channelId: string): Promise<ChannelMetadata | null> {
+    const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&id=${channelId}&key=${YOUTUBE_API_KEY}`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.error('Failed to fetch channel by ID:', response.status);
+            return null;
+        }
+
+        const data: YouTubeChannelAPIResponse = await response.json();
+        const item = data.items?.[0];
+        if (!item) {
+            return null;
+        }
+
+        return {
+            id: item.id,
+            title: item.snippet.title,
+            description: item.snippet.description,
+            thumbnail: item.snippet.thumbnails.medium?.url ?? item.snippet.thumbnails.default?.url ?? '',
+            uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
+        };
+    } catch (error) {
+        console.error('Error fetching channel by ID:', error);
+        return null;
+    }
+}
+
+/**
+ * Fetch channel metadata by username (legacy /user/ URLs)
+ */
+async function fetchChannelByUsername(username: string): Promise<ChannelMetadata | null> {
+    const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&forUsername=${username}&key=${YOUTUBE_API_KEY}`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.error('Failed to fetch channel by username:', response.status);
+            return null;
+        }
+
+        const data: YouTubeChannelAPIResponse = await response.json();
+        const item = data.items?.[0];
+        if (!item) {
+            return null;
+        }
+
+        return {
+            id: item.id,
+            title: item.snippet.title,
+            description: item.snippet.description,
+            thumbnail: item.snippet.thumbnails.medium?.url ?? item.snippet.thumbnails.default?.url ?? '',
+            uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
+        };
+    } catch (error) {
+        console.error('Error fetching channel by username:', error);
+        return null;
+    }
+}
+
+/**
+ * Search for a channel by handle or custom name
+ * Uses search API (higher quota cost) then fetches full channel details
+ */
+async function fetchChannelBySearch(query: string): Promise<ChannelMetadata | null> {
+    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=channel&maxResults=1&key=${YOUTUBE_API_KEY}`;
+
+    try {
+        const response = await fetch(searchUrl);
+        if (!response.ok) {
+            console.error('Failed to search for channel:', response.status);
+            return null;
+        }
+
+        const data: YouTubeSearchAPIResponse = await response.json();
+        const item = data.items?.[0];
+        if (!item || item.id.kind !== 'youtube#channel') {
+            return null;
+        }
+
+        // Get full channel details including uploads playlist ID
+        return fetchChannelById(item.id.channelId);
+    } catch (error) {
+        console.error('Error searching for channel:', error);
+        return null;
+    }
+}
+
+/**
+ * Resolve channel identifier to channel metadata
+ */
+export async function fetchChannelMetadata(identifier: ChannelIdentifier): Promise<ChannelMetadata | null> {
+    switch (identifier.type) {
+        case 'id':
+            return fetchChannelById(identifier.value);
+        case 'user':
+            return fetchChannelByUsername(identifier.value);
+        case 'handle':
+        case 'custom':
+            // For @handle and /c/ URLs, we need to search
+            return fetchChannelBySearch(identifier.value);
+    }
+}
+
+/**
+ * Fetch latest videos from a channel's uploads playlist
+ * Limited to maxResults (default 10)
+ */
+export async function fetchChannelVideos(
+    uploadsPlaylistId: string,
+    maxResults: number = 10
+): Promise<Omit<Video, 'addedAt'>[]> {
+    const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('playlistId', uploadsPlaylistId);
+    url.searchParams.set('maxResults', String(maxResults));
+    url.searchParams.set('key', YOUTUBE_API_KEY);
+
+    try {
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+            console.error('Failed to fetch channel videos:', response.status);
+            return [];
+        }
+
+        const data = await response.json();
+        const items: Omit<Video, 'addedAt'>[] = [];
+
+        for (const item of data.items ?? []) {
+            const videoId = item.snippet?.resourceId?.videoId;
+            if (!videoId) continue;
+
+            items.push({
+                id: videoId,
+                url: buildYouTubeUrl(videoId),
+                title: item.snippet.title,
+                thumbnail: item.snippet.thumbnails?.medium?.url ?? getThumbnailUrl(videoId, 'medium'),
+                notes: '',
+                rating: 0,
+                status: 'unwatched',
+                progress: 0,
+                uploadDate: item.snippet.publishedAt,
+                description: item.snippet.description,
+            });
+        }
+
+        return items;
+    } catch (error) {
+        console.error('Error fetching channel videos:', error);
+        return [];
+    }
+}
+
+export interface ChannelImportResult {
+    metadata: ChannelMetadata;
+    videos: Omit<Video, 'addedAt'>[];
+}
+
+/**
+ * Fetch complete channel data for subscription creation
+ * Returns channel metadata and latest 10 videos
+ */
+export async function fetchChannelForSubscription(url: string): Promise<ChannelImportResult | null> {
+    const identifier = extractChannelIdentifier(url);
+    if (!identifier) {
+        return null;
+    }
+
+    const metadata = await fetchChannelMetadata(identifier);
+    if (!metadata) {
+        return null;
+    }
+
+    const videos = await fetchChannelVideos(metadata.uploadsPlaylistId, 10);
+
+    return { metadata, videos };
+}
