@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Generated HTML file (use index.template.html as source)
+index.html
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

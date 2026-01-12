@@ -50,14 +50,30 @@ sass:
 # Excluded items can be processed by explicitly listing the directories or
 # their entries' file path in the `include:` list.
 #
-# exclude:
-#   - .sass-cache/
-#   - .jekyll-cache/
-#   - gemfiles/
-#   - Gemfile
-#   - Gemfile.lock
-#   - node_modules/
-#   - vendor/bundle/
-#   - vendor/cache/
-#   - vendor/gems/
-#   - vendor/ruby/
+exclude:
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  # Isotube React app source files (keep built files: isotube/index.html and isotube/assets/)
+  - isotube/node_modules
+  - isotube/src
+  - isotube/dist
+  - isotube/public
+  - isotube/package.json
+  - isotube/package-lock.json
+  - isotube/tsconfig.json
+  - isotube/tsconfig.app.json
+  - isotube/tsconfig.node.json
+  - isotube/vite.config.ts
+  - isotube/eslint.config.js
+  - isotube/components.json
+  - isotube/README.md
+  - isotube/CLAUDE.md
+  - isotube/.gitignore
