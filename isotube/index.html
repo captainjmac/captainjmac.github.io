@@ -5,9 +5,17 @@
     <link rel="icon" type="image/svg+xml" href="/isotube/vite.svg"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Iso-Tube</title>
-    
-  <script type="module" crossorigin src="/isotube/assets/app.js"></script>
-  <link rel="stylesheet" crossorigin href="/isotube/assets/index.css">
+
+    <script type="module" crossorigin src="/isotube/assets/app.js"></script>
+    <link rel="stylesheet" crossorigin href="/isotube/assets/index.css">
+
+
+    <!-- Cronitor RUM -->
+    <script async src="https://rum.cronitor.io/script.js"></script>
+    <script>
+        window.cronitor = window.cronitor || function() { (window.cronitor.q = window.cronitor.q || []).push(arguments); };
+        cronitor('config', { clientKey: '031069d89e6f2683b6a7713c5a51b7b9' });
+    </script>
 </head>
 <body>
 <div id="root"></div>
