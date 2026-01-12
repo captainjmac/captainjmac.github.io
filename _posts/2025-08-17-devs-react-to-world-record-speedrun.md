@@ -1,13 +1,13 @@
 ---
 layout: post
-title:  "The Secret Origins of Nina Cortex"
-date:   2025-09-07 18:00:00 +0000
+title:  "Devs React to World Record Speedrun"
+date:   2025-08-17 10:00:00 +0000
 categories: crash-twinsanity
-permalink: the-secret-origins-of-nina-cortex
-youtube_id: SyYjWJHusjM
+permalink: devs-react-to-world-record-speedrun
+youtube_id: JHRmgvBUYfk
 ---
 
-The Totally-Tubular-Twinsanity-Team (TM) re-assemble to uncover the secret origins of the mysterious Nina Cortex! What evil discoveries will they make?!! Tune in to find out - if you dare!!!!
+We're joined by two special guests to help us examine the current world record Crash Twinsanity speedrun
 <!--more-->
 
-{% include youtube.html id="SyYjWJHusjM" %}
+{% include youtube.html id="JHRmgvBUYfk" %}
