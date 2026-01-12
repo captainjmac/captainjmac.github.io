@@ -4,9 +4,10 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({command}) => ({
     plugins: [react(), tailwindcss()],
-    base: '/isotube/',
+    // Use root path for dev, /isotube/ for production
+    base: command === 'serve' ? '/' : '/isotube/',
     resolve: {
         alias: {
             '@': path.resolve(__dirname, './src'),
@@ -24,4 +25,4 @@ export default defineConfig({
             },
         },
     },
-})
+}))
