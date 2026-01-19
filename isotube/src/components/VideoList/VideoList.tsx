@@ -34,7 +34,7 @@ export function VideoList({}: VideoListProps) {
     createSubscription,
   } = usePlaylistsContext();
 
-  const [sortBy, setSortBy] = useState<SortOption>('added');
+  const [sortBy, setSortBy] = useState<SortOption>('uploaded');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [detailVideoId, setDetailVideoId] = useState<string | null>(null);
 

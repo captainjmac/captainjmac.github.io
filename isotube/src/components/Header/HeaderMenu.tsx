@@ -1,16 +1,39 @@
-import {useRef} from 'react';
+import {useRef, useState} from 'react';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {usePlaylistsContext} from '@/hooks/PlaylistsContext';
+import {useSyncSettings} from '@/hooks/useSyncSettings';
+import {useCloudSync} from '@/hooks/useCloudSync';
+import {SyncSettingsDialog} from '@/components/Settings/SyncSettingsDialog';
 import type {AppState} from '@/types';
 
 export function HeaderMenu() {
     const {exportState, importState} = usePlaylistsContext();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+
+    const currentState = exportState();
+    const {settings, setCredentials, setEnabled, setLastSyncedAt, clearSettings} = useSyncSettings();
+
+    const {
+        isConnected,
+        isSyncing,
+        lastSyncedAt,
+        error,
+        syncNow,
+        testConnection,
+        disconnect,
+    } = useCloudSync({
+        settings,
+        currentState,
+        onRemoteStateLoaded: importState,
+        onSyncComplete: setLastSyncedAt,
+    });
 
     const handleExport = () => {
         const state = exportState();
@@ -99,8 +122,64 @@ export function HeaderMenu() {
                         </svg>
                         Export
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setSyncDialogOpen(true)}>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"
+                            />
+                        </svg>
+                        <span className="flex items-center gap-2">
+                            Cloud Sync
+                            <span
+                                className={`w-2 h-2 rounded-full ${
+                                    isConnected ? 'bg-green-500' : 'bg-gray-500'
+                                }`}
+                            />
+                        </span>
+                    </DropdownMenuItem>
+                    {isConnected && (
+                        <DropdownMenuItem onClick={syncNow} disabled={isSyncing}>
+                            <svg
+                                className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                />
+                            </svg>
+                            {isSyncing ? 'Syncing...' : 'Sync Now'}
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
+
+            <SyncSettingsDialog
+                open={syncDialogOpen}
+                onOpenChange={setSyncDialogOpen}
+                settings={settings}
+                isConnected={isConnected}
+                isSyncing={isSyncing}
+                lastSyncedAt={lastSyncedAt}
+                error={error}
+                onSave={setCredentials}
+                onTestConnection={testConnection}
+                onDisconnect={handleDisconnect}
+                onEnable={setEnabled}
+            />
         </div>
     );
+
+    function handleDisconnect() {
+        disconnect();
+        clearSettings();
+    }
 }
