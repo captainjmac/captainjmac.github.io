@@ -86,7 +86,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   return (
     <div className="bg-black flex flex-col">
       {/* Video container */}
-      <div className="aspect-video max-h-[55vh] relative">
+      <div className="aspect-video max-h-[65vh] relative">
         <div ref={containerRef} className="w-full h-full"/>
         {!isReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900">

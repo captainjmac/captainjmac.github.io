@@ -120,6 +120,7 @@ export function useYouTubePlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YT.Player | null>(null);
   const progressIntervalRef = useRef<number | null>(null);
+  const lastProgressSaveRef = useRef<number>(0);
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -140,6 +141,10 @@ export function useYouTubePlayer({
   // Initialize player
   useEffect(() => {
     if (!videoId || !containerRef.current) return;
+
+    // Capture onProgress now so cleanup saves to the correct video,
+    // not whatever video callbacksRef points to after a re-render.
+    const onProgressAtMount = callbacksRef.current.onProgress;
 
     let mounted = true;
     let player: YT.Player | null = null;
@@ -190,7 +195,11 @@ export function useYouTubePlayer({
                 if (playerRef.current) {
                   const time = playerRef.current.getCurrentTime();
                   setCurrentTime(time);
-                  callbacksRef.current.onProgress?.(time);
+                  const now = Date.now();
+                  if (now - lastProgressSaveRef.current >= 30_000) {
+                    lastProgressSaveRef.current = now;
+                    callbacksRef.current.onProgress?.(time);
+                  }
                 }
               }, 1000);
             } else if (state === 2) {
@@ -226,6 +235,19 @@ export function useYouTubePlayer({
       mounted = false;
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
+      }
+      // Save final progress before destroying the player.
+      // Uses onProgressAtMount (captured at effect start) so we save
+      // to the video that was playing, not the newly selected one.
+      try {
+        if (player) {
+          const time = player.getCurrentTime();
+          if (time > 0) {
+            onProgressAtMount?.(time);
+          }
+        }
+      } catch {
+        // Player may be in a bad state during cleanup
       }
       if (player) {
         player.destroy();

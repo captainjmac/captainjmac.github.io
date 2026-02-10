@@ -165,7 +165,6 @@ export async function createVideoFromUrl(url: string): Promise<Video | null> {
       progress: 0,
       addedAt: Date.now(),
       uploadDate: apiMetadata.uploadDate,
-      description: apiMetadata.description,
     };
   } else {
     console.log('No meta data')
@@ -323,7 +322,6 @@ function playlistItemsToVideos(items: PlaylistItem[]): Omit<Video, 'addedAt'>[] 
         status: 'unwatched' as const,
         progress: 0,
         uploadDate: item.publishedAt,
-        description: item.description,
     }));
 }
 
@@ -584,7 +582,6 @@ export async function fetchChannelVideos(
                 status: 'unwatched',
                 progress: 0,
                 uploadDate: item.snippet.publishedAt,
-                description: item.snippet.description,
             });
         }
 

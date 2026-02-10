@@ -8,6 +8,10 @@ export default defineConfig(({command}) => ({
     plugins: [react(), tailwindcss()],
     // Use root path for dev, /isotube/ for production
     base: command === 'serve' ? '/' : '/isotube/',
+    server: {
+        host: 'localhost',
+        port: 5173,
+    },
     resolve: {
         alias: {
             '@': path.resolve(__dirname, './src'),

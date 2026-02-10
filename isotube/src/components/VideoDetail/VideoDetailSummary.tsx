@@ -1,4 +1,5 @@
 import type {Video} from '@/types';
+import {useVideoDescription} from '@/hooks/useVideoDescription';
 import {CalendarIcon} from '@/components/common/icons/CalendarIcon';
 import {NotesIcon} from '@/components/common/icons/NotesIcon';
 import {DescriptionIcon} from '@/components/common/icons/DescriptionIcon';
@@ -38,6 +39,8 @@ function formatUploadDate(dateStr: string | undefined): string | null {
 }
 
 export function VideoDetailSummary({video}: VideoDetailSummaryProps) {
+  const {description, isLoading} = useVideoDescription(video?.id ?? null);
+
   if (!video) {
     return null;
   }
@@ -45,7 +48,7 @@ export function VideoDetailSummary({video}: VideoDetailSummaryProps) {
   const uploadDate = formatUploadDate(video.uploadDate);
   const hasRating = video.rating > 0;
   const hasNotes = video.notes && video.notes.trim().length > 0;
-  const hasDescription = video.description && video.description.trim().length > 0;
+  const hasDescription = description.trim().length > 0;
 
   return (
     <div className="p-4 space-y-4 text-sm overflow-y-auto min-h-0">
@@ -78,20 +81,23 @@ export function VideoDetailSummary({video}: VideoDetailSummaryProps) {
       )}
 
       {/* Video description */}
-      {hasDescription && (
+      {isLoading && (
+        <p className="text-gray-500 italic">Loading description...</p>
+      )}
+      {!isLoading && hasDescription && (
         <div>
           <div className="flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-2">
             <DescriptionIcon className="w-3.5 h-3.5" />
             <span>Description</span>
           </div>
           <p className="text-gray-400 whitespace-pre-wrap leading-relaxed">
-            {video.description}
+            {description}
           </p>
         </div>
       )}
 
       {/* Empty state */}
-      {!uploadDate && !hasRating && !hasNotes && !hasDescription && (
+      {!isLoading && !uploadDate && !hasRating && !hasNotes && !hasDescription && (
         <p className="text-gray-500 italic">No additional details available.</p>
       )}
     </div>

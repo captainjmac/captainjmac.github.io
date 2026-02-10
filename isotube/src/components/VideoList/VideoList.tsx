@@ -1,7 +1,6 @@
 import {useMemo, useState} from 'react';
 import type {VideoStatus} from '@/types';
 import {VideoCard} from './VideoCard';
-import {AddVideoForm} from './AddVideoForm';
 import {VideoDetailModal} from '../VideoDetail/VideoDetailModal';
 import {usePlaylistsContext} from "../../hooks/PlaylistsContext.tsx";
 import {PlaylistIcon} from "../common/icons/PlaylistIcon.tsx";
@@ -24,14 +23,9 @@ const statusOrder: Record<VideoStatus, number> = {
 export function VideoList({}: VideoListProps) {
 
   const {
-    playlists,
     activePlaylist,
     currentVideo,
-    addVideo,
-    addVideos,
     updateVideo,
-    createPlaylistWithVideos,
-    createSubscription,
   } = usePlaylistsContext();
 
   const [sortBy, setSortBy] = useState<SortOption>('uploaded');
@@ -93,17 +87,6 @@ export function VideoList({}: VideoListProps) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-
-      <div className="p-4 border-b border-gray-700">
-        <AddVideoForm
-          onAddVideo={(video) => addVideo(activePlaylist.id, video)}
-          onAddVideos={addVideos}
-          onCreatePlaylistWithVideos={createPlaylistWithVideos}
-          onCreateSubscription={(channelData) => createSubscription(channelData.metadata, channelData.videos)}
-          existingPlaylists={playlists}
-          currentPlaylistId={activePlaylist.id}
-        />
-      </div>
 
       {playlist.videos.length > 0 && (
         <div className="px-4 py-3 border-b border-gray-700 grid grid-cols-2 gap-4">

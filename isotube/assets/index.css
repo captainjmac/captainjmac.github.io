@@ -814,8 +814,12 @@
     max-height: 50vh;
   }
 
-  .max-h-\[55vh\] {
-    max-height: 55vh;
+  .max-h-\[65vh\] {
+    max-height: 65vh;
+  }
+
+  .max-h-\[85vh\] {
+    max-height: 85vh;
   }
 
   .max-h-\[90vh\] {
@@ -868,6 +872,10 @@
 
   .w-32 {
     width: calc(var(--spacing) * 32);
+  }
+
+  .w-\[calc\(100vw-2rem\)\] {
+    width: calc(100vw - 2rem);
   }
 
   .w-full {

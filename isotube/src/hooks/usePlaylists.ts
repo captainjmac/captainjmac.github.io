@@ -15,10 +15,23 @@ const DEFAULT_STATE: AppState = {
   sidebarView: 'playlists',
 };
 
-// Migrate state from older versions that don't have subscription fields
+// Migrate state from older versions
 function migrateState(state: Partial<AppState>): AppState {
+  // Strip description from all videos (now fetched on-demand via LRU cache)
+  const playlists = (state.playlists ?? []).map(playlist => ({
+    ...playlist,
+    videos: playlist.videos.map(video => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v = video as any;
+      if ('description' in v) {
+        delete v.description;
+      }
+      return v as Video;
+    }),
+  }));
+
   return {
-    playlists: state.playlists ?? [],
+    playlists,
     subscriptions: state.subscriptions ?? [],
     activePlaylistId: state.activePlaylistId ?? null,
     activeSubscriptionId: state.activeSubscriptionId ?? null,

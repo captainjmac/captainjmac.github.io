@@ -3,6 +3,7 @@ import {usePlaylistsContext} from './hooks/PlaylistsContext';
 import {useKeyboardShortcuts} from './hooks/useKeyboardShortcuts';
 import {Sidebar} from './components/Sidebar/Sidebar';
 import {VideoList} from './components/VideoList/VideoList';
+import {AddVideoForm} from './components/VideoList/AddVideoForm';
 import {Player, type PlayerHandle} from './components/Player/Player';
 import {PlaylistList} from "./components/Sidebar/PlaylistList.tsx";
 import {SubscriptionList} from "./components/Sidebar/SubscriptionList.tsx";
@@ -14,6 +15,7 @@ import {HelpDialog} from "@/components/Header/HelpDialog.tsx";
 
 function App() {
   const {
+    playlists,
     activePlaylist,
     currentVideo,
     currentVideoId,
@@ -25,6 +27,10 @@ function App() {
     setSidebarView,
     userPlaylists,
     subscriptions,
+    addVideo,
+    addVideos,
+    createPlaylistWithVideos,
+    createSubscription,
   } = usePlaylistsContext();
 
   const [autoAdvance, setAutoAdvance] = useState(true);
@@ -59,7 +65,7 @@ function App() {
 
   return (
     <div
-      className="dark h-screen bg-gray-900 text-white grid grid-cols-1 grid-rows-[auto_1fr_auto] lg:grid-cols-[24rem_1fr] lg:grid-rows-[auto_1fr]">
+      className="h-screen bg-gray-900 text-white grid grid-cols-1 grid-rows-[auto_1fr_auto] lg:grid-cols-[24rem_1fr] lg:grid-rows-[auto_1fr]">
       {/* Header - spans full width */}
       <header className="col-span-full flex items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700">
         <Logo/>
@@ -77,6 +83,18 @@ function App() {
 
       {/* Left column: Playlists + Videos stacked (desktop only) */}
       <Sidebar className="hidden lg:flex">
+        {activePlaylist && (
+          <div className="p-4 border-b border-gray-700">
+            <AddVideoForm
+              onAddVideo={(video) => addVideo(activePlaylist.id, video)}
+              onAddVideos={addVideos}
+              onCreatePlaylistWithVideos={createPlaylistWithVideos}
+              onCreateSubscription={(channelData) => createSubscription(channelData.metadata, channelData.videos)}
+              existingPlaylists={playlists}
+              currentPlaylistId={activePlaylist.id}
+            />
+          </div>
+        )}
         <SidebarTabs
           activeTab={sidebarView}
           onTabChange={setSidebarView}
@@ -93,6 +111,18 @@ function App() {
 
       {/* Video list - below player on mobile only */}
       <section className="lg:hidden row-start-3 bg-gray-800 overflow-y-auto">
+        {activePlaylist && (
+          <div className="p-4 border-b border-gray-700">
+            <AddVideoForm
+              onAddVideo={(video) => addVideo(activePlaylist.id, video)}
+              onAddVideos={addVideos}
+              onCreatePlaylistWithVideos={createPlaylistWithVideos}
+              onCreateSubscription={(channelData) => createSubscription(channelData.metadata, channelData.videos)}
+              existingPlaylists={playlists}
+              currentPlaylistId={activePlaylist.id}
+            />
+          </div>
+        )}
         <SidebarTabs
           activeTab={sidebarView}
           onTabChange={setSidebarView}

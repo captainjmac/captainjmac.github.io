@@ -1,3 +1,4 @@
+import {useState} from 'react';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ export function ChannelSubscribeDialog({
   onSubscribe,
 }: ChannelSubscribeDialogProps) {
   const {metadata, videos} = channelData;
+  const [thumbnailError, setThumbnailError] = useState(false);
 
   const handleSubscribe = () => {
     onSubscribe();
@@ -41,14 +43,15 @@ export function ChannelSubscribeDialog({
 
         <div className="flex items-center gap-4 py-4">
           {/* Channel thumbnail */}
-          {metadata.thumbnail ? (
+          {metadata.thumbnail && !thumbnailError ? (
             <img
               src={metadata.thumbnail}
               alt={metadata.title}
-              className="w-16 h-16 rounded-full object-cover"
+              className="w-16 h-16 rounded-full object-cover shrink-0"
+              onError={() => setThumbnailError(true)}
             />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center shrink-0">
               <ChannelIcon className="w-8 h-8 text-gray-400"/>
             </div>
           )}
@@ -64,17 +67,17 @@ export function ChannelSubscribeDialog({
 
         {/* Video preview */}
         {videos.length > 0 && (
-          <div className="border-t border-gray-700 pt-4">
+          <div className="border-t border-gray-700 pt-4 overflow-hidden">
             <p className="text-xs text-gray-400 mb-2 uppercase font-semibold">Recent videos</p>
-            <div className="space-y-2 max-h-32 overflow-y-auto">
+            <div className="space-y-2 max-h-32 overflow-y-auto overflow-x-hidden">
               {videos.slice(0, 3).map((video) => (
-                <div key={video.id} className="flex items-center gap-2">
+                <div key={video.id} className="flex items-center gap-2 min-w-0">
                   <img
                     src={video.thumbnail}
                     alt=""
-                    className="w-10 h-6 object-cover rounded"
+                    className="w-10 h-6 object-cover rounded shrink-0"
                   />
-                  <span className="text-sm truncate flex-1">{video.title}</span>
+                  <span className="text-sm truncate">{video.title}</span>
                 </div>
               ))}
               {videos.length > 3 && (

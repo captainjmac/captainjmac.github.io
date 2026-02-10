@@ -13319,8 +13319,18 @@ const DEFAULT_STATE = {
   sidebarView: "playlists"
 };
 function migrateState(state) {
+  const playlists = (state.playlists ?? []).map((playlist) => ({
+    ...playlist,
+    videos: playlist.videos.map((video) => {
+      const v = video;
+      if ("description" in v) {
+        delete v.description;
+      }
+      return v;
+    })
+  }));
   return {
-    playlists: state.playlists ?? [],
+    playlists,
     subscriptions: state.subscriptions ?? [],
     activePlaylistId: state.activePlaylistId ?? null,
     activeSubscriptionId: state.activeSubscriptionId ?? null,
@@ -22172,6 +22182,391 @@ function VideoCard({
     }
   );
 }
+const sizeClasses = {
+  sm: "w-4 h-4",
+  md: "w-6 h-6",
+  lg: "w-8 h-8"
+};
+function StarRating({ rating, onChange, size: size2 = "md" }) {
+  const [hoverRating, setHoverRating] = reactExports.useState(0);
+  const displayRating = hoverRating || rating;
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-1", onMouseLeave: () => setHoverRating(0), children: [1, 2, 3, 4, 5].map((star) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "button",
+    {
+      type: "button",
+      onClick: () => onChange(star === rating ? 0 : star),
+      onMouseEnter: () => setHoverRating(star),
+      className: "focus:outline-none transition-transform hover:scale-110",
+      title: star === rating ? "Clear rating" : `Rate ${star} star${star > 1 ? "s" : ""}`,
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "svg",
+        {
+          className: `${sizeClasses[size2]} ${star <= displayRating ? "text-yellow-400" : "text-gray-600"} transition-colors`,
+          fill: "currentColor",
+          viewBox: "0 0 24 24",
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" })
+        }
+      )
+    },
+    star
+  )) });
+}
+const statusOptions = [
+  { value: "unwatched", label: "Unwatched", color: "bg-gray-500" },
+  { value: "in_progress", label: "In Progress", color: "bg-yellow-500" },
+  { value: "completed", label: "Completed", color: "bg-green-500" }
+];
+function VideoDetail({ video, onUpdate }) {
+  if (!video) {
+    return null;
+  }
+  const [notes, setNotes] = reactExports.useState(video.notes);
+  const [isSaving, setIsSaving] = reactExports.useState(false);
+  reactExports.useEffect(() => {
+    setNotes(video.notes);
+  }, [video.id, video.notes]);
+  reactExports.useEffect(() => {
+    if (notes === video.notes) return;
+    setIsSaving(true);
+    const timeout = setTimeout(() => {
+      onUpdate({ notes });
+      setIsSaving(false);
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [notes, video.notes, onUpdate]);
+  const handleRatingChange = reactExports.useCallback((rating) => {
+    onUpdate({ rating });
+  }, [onUpdate]);
+  const handleStatusChange = reactExports.useCallback((status) => {
+    onUpdate({ status });
+  }, [onUpdate]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 overflow-auto p-4 space-y-6", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Rating" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        StarRating,
+        {
+          rating: video.rating,
+          onChange: handleRatingChange,
+          size: "lg"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Status" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: statusOptions.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "button",
+        {
+          onClick: () => handleStatusChange(option.value),
+          className: `flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${video.status === option.value ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`,
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-2 h-2 rounded-full ${option.color}` }),
+            option.label
+          ]
+        },
+        option.value
+      )) })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between mb-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400", children: "Notes" }),
+        isSaving && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-gray-500", children: "Saving..." })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "textarea",
+        {
+          value: notes,
+          onChange: (e) => setNotes(e.target.value),
+          placeholder: "Add your notes here...",
+          rows: 6,
+          className: "w-full px-3 py-2 bg-gray-700 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-gray-500 space-y-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+        "Added: ",
+        new Date(video.addedAt).toLocaleDateString()
+      ] }),
+      video.progress > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+        "Last position: ",
+        Math.floor(video.progress / 60),
+        ":",
+        String(Math.floor(video.progress % 60)).padStart(2, "0")
+      ] })
+    ] })
+  ] }) });
+}
+function VideoDetailModal({ video, onUpdate, onClose }) {
+  if (!video) {
+    return null;
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "fixed inset-0 z-50 flex items-center justify-center p-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        className: "absolute inset-0 bg-black/70",
+        onClick: onClose
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative bg-gray-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-4 p-4 border-b border-gray-700", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "img",
+          {
+            src: video.thumbnail,
+            alt: video.title,
+            className: "w-32 aspect-video rounded object-cover flex-shrink-0"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "font-semibold text-lg line-clamp-2", children: video.title }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "a",
+            {
+              href: video.url,
+              target: "_blank",
+              rel: "noopener noreferrer",
+              className: "text-sm text-blue-400 hover:text-blue-300 mt-1 inline-block",
+              children: "Open on YouTube"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: onClose,
+            className: "p-1 rounded hover:bg-gray-700 transition-colors flex-shrink-0",
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M6 18L18 6M6 6l12 12" }) })
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        VideoDetail,
+        {
+          video,
+          onUpdate
+        }
+      )
+    ] })
+  ] });
+}
+function PlaylistIcon() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "svg",
+    {
+      className: "w-16 h-16 mx-auto text-gray-600 mb-4",
+      fill: "none",
+      stroke: "currentColor",
+      viewBox: "0 0 24 24",
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "path",
+        {
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeWidth: 1.5,
+          d: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+        }
+      )
+    }
+  );
+}
+function EmptyVideoListIcon() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "svg",
+    {
+      className: "w-16 h-16 mx-auto text-gray-600 mb-4",
+      fill: "none",
+      stroke: "currentColor",
+      viewBox: "0 0 24 24",
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "path",
+        {
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeWidth: 1.5,
+          d: "M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+        }
+      )
+    }
+  );
+}
+function VideoFilterSelector({ value, onChange, videos }) {
+  const counts = reactExports.useMemo(() => ({
+    all: videos.length,
+    unwatched: videos.filter((v) => v.status === "unwatched").length,
+    in_progress: videos.filter((v) => v.status === "in_progress").length,
+    completed: videos.filter((v) => v.status === "completed").length
+  }), [videos]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm text-gray-400 shrink-0", children: "Filter:" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative flex-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "select",
+        {
+          value,
+          onChange,
+          className: "appearance-none w-full bg-gray-700 text-sm rounded pl-2 pr-7 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "all", children: [
+              "All (",
+              counts.all,
+              ")"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "unwatched", children: [
+              "Unwatched (",
+              counts.unwatched,
+              ")"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "in_progress", children: [
+              "In Progress (",
+              counts.in_progress,
+              ")"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "completed", children: [
+              "Completed (",
+              counts.completed,
+              ")"
+            ] })
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "svg",
+        {
+          className: "absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
+          fill: "none",
+          stroke: "currentColor",
+          viewBox: "0 0 24 24",
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M19 9l-7 7-7-7" })
+        }
+      )
+    ] })
+  ] });
+}
+function VideoSortSelector(props) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm text-gray-400 shrink-0", children: "Sort:" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative flex-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "select",
+        {
+          value: props.value,
+          onChange: props.onChange,
+          className: "appearance-none w-full bg-gray-700 text-sm rounded pl-2 pr-7 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "added", children: "Recently Added" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "uploaded", children: "Upload Date" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "title", children: "Title" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "rating", children: "Rating" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "status", children: "Status" })
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "svg",
+        {
+          className: "absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
+          fill: "none",
+          stroke: "currentColor",
+          viewBox: "0 0 24 24",
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M19 9l-7 7-7-7" })
+        }
+      )
+    ] })
+  ] });
+}
+const statusOrder = {
+  in_progress: 0,
+  unwatched: 1,
+  completed: 2
+};
+function VideoList({}) {
+  const {
+    activePlaylist,
+    currentVideo,
+    updateVideo
+  } = usePlaylistsContext();
+  const [sortBy, setSortBy] = reactExports.useState("uploaded");
+  const [filterStatus, setFilterStatus] = reactExports.useState("all");
+  const [detailVideoId, setDetailVideoId] = reactExports.useState(null);
+  const currentVideoId = currentVideo?.id ?? null;
+  const playlist = activePlaylist;
+  const filteredVideos = reactExports.useMemo(() => {
+    if (!playlist) return [];
+    let videos = [...playlist.videos];
+    if (filterStatus !== "all") {
+      videos = videos.filter((v) => v.status === filterStatus);
+    }
+    videos.sort((a, b) => {
+      switch (sortBy) {
+        case "title":
+          return a.title.localeCompare(b.title);
+        case "rating":
+          return b.rating - a.rating;
+        case "status":
+          return statusOrder[a.status] - statusOrder[b.status];
+        case "uploaded":
+          if (!a.uploadDate && !b.uploadDate) return 0;
+          if (!a.uploadDate) return 1;
+          if (!b.uploadDate) return -1;
+          return new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime();
+        case "added":
+        default:
+          return b.addedAt - a.addedAt;
+      }
+    });
+    return videos;
+  }, [playlist?.videos, sortBy, filterStatus]);
+  if (!playlist) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 flex items-center justify-center p-4", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(PlaylistIcon, {}),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 mb-2", children: "No playlist selected" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 text-sm", children: "Create or select a playlist from the sidebar" })
+    ] }) });
+  }
+  const detailVideo = detailVideoId ? playlist.videos.find((v) => v.id === detailVideoId) ?? null : null;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col overflow-hidden", children: [
+    playlist.videos.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "px-4 py-3 border-b border-gray-700 grid grid-cols-2 gap-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        VideoFilterSelector,
+        {
+          value: filterStatus,
+          onChange: (e) => setFilterStatus(e.target.value),
+          videos: playlist.videos
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        VideoSortSelector,
+        {
+          value: sortBy,
+          onChange: (e) => setSortBy(e.target.value)
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto p-2 min-w-0", children: playlist.videos.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-12", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyVideoListIcon, {}),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 mb-2", children: "No videos in this playlist" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 text-sm", children: "Paste a YouTube URL above to add your first video" })
+    ] }) : filteredVideos.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-center py-12", children: /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400", children: "No videos match this filter" }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid gap-2 min-w-0", children: filteredVideos.map((video) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+      VideoCard,
+      {
+        video,
+        isPlaying: video.id === currentVideoId,
+        onShowDetail: () => setDetailVideoId(video.id)
+      },
+      video.id
+    )) }) }),
+    detailVideo && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      VideoDetailModal,
+      {
+        video: detailVideo,
+        onUpdate: (updates) => updateVideo(playlist.id, detailVideo.id, updates),
+        onClose: () => setDetailVideoId(null)
+      }
+    )
+  ] });
+}
 function extractVideoId(url) {
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
@@ -22259,8 +22654,7 @@ async function createVideoFromUrl(url) {
       status: "unwatched",
       progress: 0,
       addedAt: Date.now(),
-      uploadDate: apiMetadata.uploadDate,
-      description: apiMetadata.description
+      uploadDate: apiMetadata.uploadDate
     };
   } else {
     console.log("No meta data");
@@ -22353,8 +22747,7 @@ function playlistItemsToVideos(items) {
     rating: 0,
     status: "unwatched",
     progress: 0,
-    uploadDate: item.publishedAt,
-    description: item.description
+    uploadDate: item.publishedAt
   }));
 }
 async function fetchPlaylistForImport(url) {
@@ -22498,8 +22891,7 @@ async function fetchChannelVideos(uploadsPlaylistId, maxResults = 10) {
         rating: 0,
         status: "unwatched",
         progress: 0,
-        uploadDate: item.snippet.publishedAt,
-        description: item.snippet.description
+        uploadDate: item.snippet.publishedAt
       });
     }
     return items;
@@ -22865,7 +23257,7 @@ function DialogContent({
       {
         "data-slot": "dialog-content",
         className: cn(
-          "bg-gray-800 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-gray-700 p-6 shadow-lg duration-200 sm:rounded-lg",
+          "bg-gray-800 text-white data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-[calc(100vw-2rem)] max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden translate-x-[-50%] translate-y-[-50%] gap-4 border border-gray-700 p-6 shadow-lg duration-200 sm:rounded-lg",
           className
         ),
         ...props,
@@ -23116,6 +23508,7 @@ function ChannelSubscribeDialog({
   onSubscribe
 }) {
   const { metadata, videos } = channelData;
+  const [thumbnailError, setThumbnailError] = reactExports.useState(false);
   const handleSubscribe = () => {
     onSubscribe();
     onOpenChange(false);
@@ -23126,14 +23519,15 @@ function ChannelSubscribeDialog({
       /* @__PURE__ */ jsxRuntimeExports.jsx(DialogDescription, { children: "Add this channel to your subscriptions to track new videos" })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-4 py-4", children: [
-      metadata.thumbnail ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      metadata.thumbnail && !thumbnailError ? /* @__PURE__ */ jsxRuntimeExports.jsx(
         "img",
         {
           src: metadata.thumbnail,
           alt: metadata.title,
-          className: "w-16 h-16 rounded-full object-cover"
+          className: "w-16 h-16 rounded-full object-cover shrink-0",
+          onError: () => setThumbnailError(true)
         }
-      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChannelIcon, { className: "w-8 h-8 text-gray-400" }) }),
+      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChannelIcon, { className: "w-8 h-8 text-gray-400" }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "font-semibold text-lg truncate", children: metadata.title }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-gray-400 mt-1", children: [
@@ -23144,19 +23538,19 @@ function ChannelSubscribeDialog({
         ] })
       ] })
     ] }),
-    videos.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border-t border-gray-700 pt-4", children: [
+    videos.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border-t border-gray-700 pt-4 overflow-hidden", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-gray-400 mb-2 uppercase font-semibold", children: "Recent videos" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2 max-h-32 overflow-y-auto", children: [
-        videos.slice(0, 3).map((video) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2 max-h-32 overflow-y-auto overflow-x-hidden", children: [
+        videos.slice(0, 3).map((video) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 min-w-0", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "img",
             {
               src: video.thumbnail,
               alt: "",
-              className: "w-10 h-6 object-cover rounded"
+              className: "w-10 h-6 object-cover rounded shrink-0"
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm truncate flex-1", children: video.title })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm truncate", children: video.title })
         ] }, video.id)),
         videos.length > 3 && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-gray-500", children: [
           "+",
@@ -23415,407 +23809,6 @@ function AddVideoForm({
     )
   ] });
 }
-const sizeClasses = {
-  sm: "w-4 h-4",
-  md: "w-6 h-6",
-  lg: "w-8 h-8"
-};
-function StarRating({ rating, onChange, size: size2 = "md" }) {
-  const [hoverRating, setHoverRating] = reactExports.useState(0);
-  const displayRating = hoverRating || rating;
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-1", onMouseLeave: () => setHoverRating(0), children: [1, 2, 3, 4, 5].map((star) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "button",
-    {
-      type: "button",
-      onClick: () => onChange(star === rating ? 0 : star),
-      onMouseEnter: () => setHoverRating(star),
-      className: "focus:outline-none transition-transform hover:scale-110",
-      title: star === rating ? "Clear rating" : `Rate ${star} star${star > 1 ? "s" : ""}`,
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "svg",
-        {
-          className: `${sizeClasses[size2]} ${star <= displayRating ? "text-yellow-400" : "text-gray-600"} transition-colors`,
-          fill: "currentColor",
-          viewBox: "0 0 24 24",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" })
-        }
-      )
-    },
-    star
-  )) });
-}
-const statusOptions = [
-  { value: "unwatched", label: "Unwatched", color: "bg-gray-500" },
-  { value: "in_progress", label: "In Progress", color: "bg-yellow-500" },
-  { value: "completed", label: "Completed", color: "bg-green-500" }
-];
-function VideoDetail({ video, onUpdate }) {
-  if (!video) {
-    return null;
-  }
-  const [notes, setNotes] = reactExports.useState(video.notes);
-  const [isSaving, setIsSaving] = reactExports.useState(false);
-  reactExports.useEffect(() => {
-    setNotes(video.notes);
-  }, [video.id, video.notes]);
-  reactExports.useEffect(() => {
-    if (notes === video.notes) return;
-    setIsSaving(true);
-    const timeout = setTimeout(() => {
-      onUpdate({ notes });
-      setIsSaving(false);
-    }, 500);
-    return () => clearTimeout(timeout);
-  }, [notes, video.notes, onUpdate]);
-  const handleRatingChange = reactExports.useCallback((rating) => {
-    onUpdate({ rating });
-  }, [onUpdate]);
-  const handleStatusChange = reactExports.useCallback((status) => {
-    onUpdate({ status });
-  }, [onUpdate]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 overflow-auto p-4 space-y-6", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Rating" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        StarRating,
-        {
-          rating: video.rating,
-          onChange: handleRatingChange,
-          size: "lg"
-        }
-      )
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Status" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: statusOptions.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          onClick: () => handleStatusChange(option.value),
-          className: `flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${video.status === option.value ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`,
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-2 h-2 rounded-full ${option.color}` }),
-            option.label
-          ]
-        },
-        option.value
-      )) })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between mb-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400", children: "Notes" }),
-        isSaving && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-gray-500", children: "Saving..." })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "textarea",
-        {
-          value: notes,
-          onChange: (e) => setNotes(e.target.value),
-          placeholder: "Add your notes here...",
-          rows: 6,
-          className: "w-full px-3 py-2 bg-gray-700 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-        }
-      )
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-gray-500 space-y-1", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
-        "Added: ",
-        new Date(video.addedAt).toLocaleDateString()
-      ] }),
-      video.progress > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
-        "Last position: ",
-        Math.floor(video.progress / 60),
-        ":",
-        String(Math.floor(video.progress % 60)).padStart(2, "0")
-      ] })
-    ] })
-  ] }) });
-}
-function VideoDetailModal({ video, onUpdate, onClose }) {
-  if (!video) {
-    return null;
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "fixed inset-0 z-50 flex items-center justify-center p-4", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "div",
-      {
-        className: "absolute inset-0 bg-black/70",
-        onClick: onClose
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative bg-gray-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-4 p-4 border-b border-gray-700", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "img",
-          {
-            src: video.thumbnail,
-            alt: video.title,
-            className: "w-32 aspect-video rounded object-cover flex-shrink-0"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "font-semibold text-lg line-clamp-2", children: video.title }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "a",
-            {
-              href: video.url,
-              target: "_blank",
-              rel: "noopener noreferrer",
-              className: "text-sm text-blue-400 hover:text-blue-300 mt-1 inline-block",
-              children: "Open on YouTube"
-            }
-          )
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            onClick: onClose,
-            className: "p-1 rounded hover:bg-gray-700 transition-colors flex-shrink-0",
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M6 18L18 6M6 6l12 12" }) })
-          }
-        )
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        VideoDetail,
-        {
-          video,
-          onUpdate
-        }
-      )
-    ] })
-  ] });
-}
-function PlaylistIcon() {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "svg",
-    {
-      className: "w-16 h-16 mx-auto text-gray-600 mb-4",
-      fill: "none",
-      stroke: "currentColor",
-      viewBox: "0 0 24 24",
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "path",
-        {
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          strokeWidth: 1.5,
-          d: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-        }
-      )
-    }
-  );
-}
-function EmptyVideoListIcon() {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "svg",
-    {
-      className: "w-16 h-16 mx-auto text-gray-600 mb-4",
-      fill: "none",
-      stroke: "currentColor",
-      viewBox: "0 0 24 24",
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "path",
-        {
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          strokeWidth: 1.5,
-          d: "M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-        }
-      )
-    }
-  );
-}
-function VideoFilterSelector({ value, onChange, videos }) {
-  const counts = reactExports.useMemo(() => ({
-    all: videos.length,
-    unwatched: videos.filter((v) => v.status === "unwatched").length,
-    in_progress: videos.filter((v) => v.status === "in_progress").length,
-    completed: videos.filter((v) => v.status === "completed").length
-  }), [videos]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm text-gray-400 shrink-0", children: "Filter:" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative flex-1", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "select",
-        {
-          value,
-          onChange,
-          className: "appearance-none w-full bg-gray-700 text-sm rounded pl-2 pr-7 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer",
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "all", children: [
-              "All (",
-              counts.all,
-              ")"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "unwatched", children: [
-              "Unwatched (",
-              counts.unwatched,
-              ")"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "in_progress", children: [
-              "In Progress (",
-              counts.in_progress,
-              ")"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "completed", children: [
-              "Completed (",
-              counts.completed,
-              ")"
-            ] })
-          ]
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "svg",
-        {
-          className: "absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
-          fill: "none",
-          stroke: "currentColor",
-          viewBox: "0 0 24 24",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M19 9l-7 7-7-7" })
-        }
-      )
-    ] })
-  ] });
-}
-function VideoSortSelector(props) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm text-gray-400 shrink-0", children: "Sort:" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative flex-1", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "select",
-        {
-          value: props.value,
-          onChange: props.onChange,
-          className: "appearance-none w-full bg-gray-700 text-sm rounded pl-2 pr-7 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer",
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "added", children: "Recently Added" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "uploaded", children: "Upload Date" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "title", children: "Title" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "rating", children: "Rating" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "status", children: "Status" })
-          ]
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "svg",
-        {
-          className: "absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none",
-          fill: "none",
-          stroke: "currentColor",
-          viewBox: "0 0 24 24",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M19 9l-7 7-7-7" })
-        }
-      )
-    ] })
-  ] });
-}
-const statusOrder = {
-  in_progress: 0,
-  unwatched: 1,
-  completed: 2
-};
-function VideoList({}) {
-  const {
-    playlists,
-    activePlaylist,
-    currentVideo,
-    addVideo,
-    addVideos,
-    updateVideo,
-    createPlaylistWithVideos,
-    createSubscription
-  } = usePlaylistsContext();
-  const [sortBy, setSortBy] = reactExports.useState("uploaded");
-  const [filterStatus, setFilterStatus] = reactExports.useState("all");
-  const [detailVideoId, setDetailVideoId] = reactExports.useState(null);
-  const currentVideoId = currentVideo?.id ?? null;
-  const playlist = activePlaylist;
-  const filteredVideos = reactExports.useMemo(() => {
-    if (!playlist) return [];
-    let videos = [...playlist.videos];
-    if (filterStatus !== "all") {
-      videos = videos.filter((v) => v.status === filterStatus);
-    }
-    videos.sort((a, b) => {
-      switch (sortBy) {
-        case "title":
-          return a.title.localeCompare(b.title);
-        case "rating":
-          return b.rating - a.rating;
-        case "status":
-          return statusOrder[a.status] - statusOrder[b.status];
-        case "uploaded":
-          if (!a.uploadDate && !b.uploadDate) return 0;
-          if (!a.uploadDate) return 1;
-          if (!b.uploadDate) return -1;
-          return new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime();
-        case "added":
-        default:
-          return b.addedAt - a.addedAt;
-      }
-    });
-    return videos;
-  }, [playlist?.videos, sortBy, filterStatus]);
-  if (!playlist) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 flex items-center justify-center p-4", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(PlaylistIcon, {}),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 mb-2", children: "No playlist selected" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 text-sm", children: "Create or select a playlist from the sidebar" })
-    ] }) });
-  }
-  const detailVideo = detailVideoId ? playlist.videos.find((v) => v.id === detailVideoId) ?? null : null;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col overflow-hidden", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-4 border-b border-gray-700", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      AddVideoForm,
-      {
-        onAddVideo: (video) => addVideo(activePlaylist.id, video),
-        onAddVideos: addVideos,
-        onCreatePlaylistWithVideos: createPlaylistWithVideos,
-        onCreateSubscription: (channelData) => createSubscription(channelData.metadata, channelData.videos),
-        existingPlaylists: playlists,
-        currentPlaylistId: activePlaylist.id
-      }
-    ) }),
-    playlist.videos.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "px-4 py-3 border-b border-gray-700 grid grid-cols-2 gap-4", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        VideoFilterSelector,
-        {
-          value: filterStatus,
-          onChange: (e) => setFilterStatus(e.target.value),
-          videos: playlist.videos
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        VideoSortSelector,
-        {
-          value: sortBy,
-          onChange: (e) => setSortBy(e.target.value)
-        }
-      )
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto p-2 min-w-0", children: playlist.videos.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-12", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyVideoListIcon, {}),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 mb-2", children: "No videos in this playlist" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 text-sm", children: "Paste a YouTube URL above to add your first video" })
-    ] }) : filteredVideos.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-center py-12", children: /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400", children: "No videos match this filter" }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid gap-2 min-w-0", children: filteredVideos.map((video) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-      VideoCard,
-      {
-        video,
-        isPlaying: video.id === currentVideoId,
-        onShowDetail: () => setDetailVideoId(video.id)
-      },
-      video.id
-    )) }) }),
-    detailVideo && /* @__PURE__ */ jsxRuntimeExports.jsx(
-      VideoDetailModal,
-      {
-        video: detailVideo,
-        onUpdate: (updates) => updateVideo(playlist.id, detailVideo.id, updates),
-        onClose: () => setDetailVideoId(null)
-      }
-    )
-  ] });
-}
 let apiLoadPromise = null;
 function loadYouTubeAPI() {
   if (apiLoadPromise) return apiLoadPromise;
@@ -23844,6 +23837,7 @@ function useYouTubePlayer({
   const containerRef = reactExports.useRef(null);
   const playerRef = reactExports.useRef(null);
   const progressIntervalRef = reactExports.useRef(null);
+  const lastProgressSaveRef = reactExports.useRef(0);
   const [isReady, setIsReady] = reactExports.useState(false);
   const [isPlaying, setIsPlaying] = reactExports.useState(false);
   const [currentTime, setCurrentTime] = reactExports.useState(0);
@@ -23858,6 +23852,7 @@ function useYouTubePlayer({
   }
   reactExports.useEffect(() => {
     if (!videoId || !containerRef.current) return;
+    const onProgressAtMount = callbacksRef.current.onProgress;
     let mounted = true;
     let player = null;
     const initPlayer = async () => {
@@ -23900,7 +23895,11 @@ function useYouTubePlayer({
                 if (playerRef.current) {
                   const time = playerRef.current.getCurrentTime();
                   setCurrentTime(time);
-                  callbacksRef.current.onProgress?.(time);
+                  const now = Date.now();
+                  if (now - lastProgressSaveRef.current >= 3e4) {
+                    lastProgressSaveRef.current = now;
+                    callbacksRef.current.onProgress?.(time);
+                  }
                 }
               }, 1e3);
             } else if (state === 2) {
@@ -23932,6 +23931,15 @@ function useYouTubePlayer({
       mounted = false;
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
+      }
+      try {
+        if (player) {
+          const time = player.getCurrentTime();
+          if (time > 0) {
+            onProgressAtMount?.(time);
+          }
+        }
+      } catch {
       }
       if (player) {
         player.destroy();
@@ -24087,7 +24095,7 @@ const Player = reactExports.forwardRef(function Player2({
     ] }) });
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-black flex flex-col", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "aspect-video max-h-[55vh] relative", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "aspect-video max-h-[65vh] relative", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: containerRef, className: "w-full h-full" }),
       !isReady && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 flex items-center justify-center bg-gray-900", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Spinner, {}) })
     ] }),
@@ -36988,6 +36996,71 @@ function HeaderMenu() {
     clearSettings();
   }
 }
+const CACHE_KEY = "isotube-description-cache";
+const MAX_ENTRIES = 20;
+function readCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+function writeCache(entries) {
+  localStorage.setItem(CACHE_KEY, JSON.stringify(entries));
+}
+function getCachedDescription(videoId) {
+  const entries = readCache();
+  const index2 = entries.findIndex((e) => e.videoId === videoId);
+  if (index2 === -1) return null;
+  const [entry] = entries.splice(index2, 1);
+  entries.unshift(entry);
+  writeCache(entries);
+  return entry.description;
+}
+function setCachedDescription(videoId, description) {
+  const entries = readCache();
+  const index2 = entries.findIndex((e) => e.videoId === videoId);
+  if (index2 !== -1) {
+    entries.splice(index2, 1);
+  }
+  entries.unshift({ videoId, description });
+  if (entries.length > MAX_ENTRIES) {
+    entries.length = MAX_ENTRIES;
+  }
+  writeCache(entries);
+}
+function useVideoDescription(videoId) {
+  const [description, setDescription] = reactExports.useState("");
+  const [isLoading, setIsLoading] = reactExports.useState(false);
+  reactExports.useEffect(() => {
+    if (!videoId) {
+      setDescription("");
+      setIsLoading(false);
+      return;
+    }
+    const cached = getCachedDescription(videoId);
+    if (cached !== null) {
+      setDescription(cached);
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    fetchVideoMetadataFromAPI(videoId).then((metadata) => {
+      if (cancelled) return;
+      const desc = metadata?.description ?? "";
+      setCachedDescription(videoId, desc);
+      setDescription(desc);
+      setIsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [videoId]);
+  return { description, isLoading };
+}
 function CalendarIcon({ className = "w-4 h-4" }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
     "svg",
@@ -37083,13 +37156,14 @@ function formatUploadDate(dateStr) {
   }
 }
 function VideoDetailSummary({ video }) {
+  const { description, isLoading } = useVideoDescription(video?.id ?? null);
   if (!video) {
     return null;
   }
   const uploadDate = formatUploadDate(video.uploadDate);
   const hasRating = video.rating > 0;
   const hasNotes = video.notes && video.notes.trim().length > 0;
-  const hasDescription = video.description && video.description.trim().length > 0;
+  const hasDescription = description.trim().length > 0;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-4 space-y-4 text-sm overflow-y-auto min-h-0", children: [
     (uploadDate || hasRating) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-4 text-gray-400", children: [
       uploadDate && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
@@ -37105,14 +37179,15 @@ function VideoDetailSummary({ video }) {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-300 whitespace-pre-wrap", children: video.notes })
     ] }),
-    hasDescription && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+    isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 italic", children: "Loading description..." }),
+    !isLoading && hasDescription && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-2", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(DescriptionIcon, { className: "w-3.5 h-3.5" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Description" })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 whitespace-pre-wrap leading-relaxed", children: video.description })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 whitespace-pre-wrap leading-relaxed", children: description })
     ] }),
-    !uploadDate && !hasRating && !hasNotes && !hasDescription && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 italic", children: "No additional details available." })
+    !isLoading && !uploadDate && !hasRating && !hasNotes && !hasDescription && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 italic", children: "No additional details available." })
   ] });
 }
 function HelpIcon() {
@@ -37160,6 +37235,7 @@ function HelpDialog() {
 }
 function App() {
   const {
+    playlists,
     activePlaylist,
     currentVideo,
     currentVideoId,
@@ -37170,7 +37246,11 @@ function App() {
     sidebarView,
     setSidebarView,
     userPlaylists,
-    subscriptions
+    subscriptions,
+    addVideo,
+    addVideos,
+    createPlaylistWithVideos,
+    createSubscription
   } = usePlaylistsContext();
   const [autoAdvance, setAutoAdvance] = reactExports.useState(true);
   const playerRef = reactExports.useRef(null);
@@ -37196,7 +37276,7 @@ function App() {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
-      className: "dark h-screen bg-gray-900 text-white grid grid-cols-1 grid-rows-[auto_1fr_auto] lg:grid-cols-[24rem_1fr] lg:grid-rows-[auto_1fr]",
+      className: "h-screen bg-gray-900 text-white grid grid-cols-1 grid-rows-[auto_1fr_auto] lg:grid-cols-[24rem_1fr] lg:grid-rows-[auto_1fr]",
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "col-span-full flex items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(Logo, {}),
@@ -37210,6 +37290,17 @@ function App() {
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(Sidebar, { className: "hidden lg:flex", children: [
+          activePlaylist && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-4 border-b border-gray-700", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            AddVideoForm,
+            {
+              onAddVideo: (video) => addVideo(activePlaylist.id, video),
+              onAddVideos: addVideos,
+              onCreatePlaylistWithVideos: createPlaylistWithVideos,
+              onCreateSubscription: (channelData) => createSubscription(channelData.metadata, channelData.videos),
+              existingPlaylists: playlists,
+              currentPlaylistId: activePlaylist.id
+            }
+          ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             SidebarTabs,
             {
@@ -37223,6 +37314,17 @@ function App() {
           /* @__PURE__ */ jsxRuntimeExports.jsx(VideoList, {})
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "lg:hidden row-start-3 bg-gray-800 overflow-y-auto", children: [
+          activePlaylist && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-4 border-b border-gray-700", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            AddVideoForm,
+            {
+              onAddVideo: (video) => addVideo(activePlaylist.id, video),
+              onAddVideos: addVideos,
+              onCreatePlaylistWithVideos: createPlaylistWithVideos,
+              onCreateSubscription: (channelData) => createSubscription(channelData.metadata, channelData.videos),
+              existingPlaylists: playlists,
+              currentPlaylistId: activePlaylist.id
+            }
+          ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             SidebarTabs,
             {
