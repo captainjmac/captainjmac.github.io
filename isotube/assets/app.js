@@ -13309,7 +13309,16 @@ function useLocalStorage(key, initialValue) {
   }, []);
   return [storedValue, setValue];
 }
-const generateId = () => crypto.randomUUID();
+const generateId = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r2 = Math.random() * 16 | 0;
+    const v = c === "x" ? r2 : r2 & 3 | 8;
+    return v.toString(16);
+  });
+};
 const DEFAULT_STATE = {
   playlists: [],
   subscriptions: [],

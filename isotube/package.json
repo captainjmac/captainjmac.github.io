@@ -10,7 +10,7 @@
     "dev": "vite",
     "prebuild": "npm run generate:dev",
     "build": "tsc -b && vite build",
-    "build:deploy": "npm run build && cp -r dist/assets . && cp dist/index.html .",
+    "build:deploy": "npm run build && cp -r dist/assets . && cp dist/index.html . && cp dist/vite.svg .",
     "lint": "eslint .",
     "preview": "vite preview"
   },
