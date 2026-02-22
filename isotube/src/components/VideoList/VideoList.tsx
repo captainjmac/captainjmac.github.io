@@ -26,6 +26,7 @@ export function VideoList({}: VideoListProps) {
     activePlaylist,
     currentVideo,
     updateVideo,
+    sidebarView,
   } = usePlaylistsContext();
 
   const [sortBy, setSortBy] = useState<SortOption>('uploaded');
@@ -70,12 +71,14 @@ export function VideoList({}: VideoListProps) {
   }, [playlist?.videos, sortBy, filterStatus]);
 
   if (!playlist) {
+    const message = sidebarView === 'subscriptions'
+      ? 'Select a channel from the sidebar'
+      : 'Select a playlist from the sidebar';
     return (
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="text-center">
           <PlaylistIcon/>
-          <p className="text-gray-400 mb-2">No playlist selected</p>
-          <p className="text-gray-500 text-sm">Create or select a playlist from the sidebar</p>
+          <p className="text-gray-400 mb-2">{message}</p>
         </div>
       </div>
     );

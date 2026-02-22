@@ -12,6 +12,7 @@ import {
 } from '@/utils/youtube';
 import {PlaylistImportDialog} from './PlaylistImportDialog';
 import {ChannelSubscribeDialog} from './ChannelSubscribeDialog';
+import {useToast} from '@/hooks/useToast';
 
 interface AddVideoFormProps {
   onAddVideo: (video: Omit<Video, 'addedAt'>) => void;
@@ -20,6 +21,11 @@ interface AddVideoFormProps {
   onCreateSubscription: (channelData: ChannelImportResult) => void;
   existingPlaylists: Playlist[];
   currentPlaylistId: string | null;
+}
+
+function getErrorMessage(err: unknown, fallback: string): string {
+    if (err instanceof Error) return err.message;
+    return fallback;
 }
 
 export function AddVideoForm({
@@ -32,7 +38,7 @@ export function AddVideoForm({
 }: AddVideoFormProps) {
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {toast} = useToast();
 
   // Playlist import state
   const [showPlaylistImportDialog, setShowPlaylistImportDialog] = useState(false);
@@ -44,7 +50,6 @@ export function AddVideoForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
 
     const trimmedUrl = url.trim();
     if (!trimmedUrl) return;
@@ -59,10 +64,10 @@ export function AddVideoForm({
           setShowChannelDialog(true);
           setUrl('');
         } else {
-          setError('Could not fetch channel information');
+          toast('Could not find channel — it may not exist or has no public uploads');
         }
       } catch (err) {
-        setError('Failed to fetch channel');
+        toast(getErrorMessage(err, 'Failed to fetch channel'));
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -80,10 +85,10 @@ export function AddVideoForm({
           setShowPlaylistImportDialog(true);
           setUrl('');
         } else {
-          setError('Could not fetch playlist or playlist is empty');
+          toast('Could not fetch playlist or playlist is empty');
         }
       } catch (err) {
-        setError('Failed to fetch playlist');
+        toast(getErrorMessage(err, 'Failed to fetch playlist'));
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -94,7 +99,7 @@ export function AddVideoForm({
     // Regular single video logic
     const videoId = extractVideoId(trimmedUrl);
     if (!videoId) {
-      setError('Invalid YouTube URL');
+      toast('Invalid YouTube URL');
       return;
     }
 
@@ -105,10 +110,10 @@ export function AddVideoForm({
         onAddVideo(video);
         setUrl('');
       } else {
-        setError('Could not fetch video information');
+        toast('Could not fetch video information');
       }
     } catch (err) {
-      setError('Failed to add video');
+      toast(getErrorMessage(err, 'Failed to add video'));
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -122,7 +127,6 @@ export function AddVideoForm({
     if (isChannelUrl(pastedText) && !url) {
       e.preventDefault();
       setUrl(pastedText);
-      setError(null);
       setIsLoading(true);
 
       try {
@@ -132,10 +136,10 @@ export function AddVideoForm({
           setShowChannelDialog(true);
           setUrl('');
         } else {
-          setError('Could not fetch channel information');
+          toast('Could not find channel — it may not exist or has no public uploads');
         }
       } catch (err) {
-        setError('Failed to fetch channel');
+        toast(getErrorMessage(err, 'Failed to fetch channel'));
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -147,7 +151,6 @@ export function AddVideoForm({
     if (isPlaylistUrl(pastedText) && !url) {
       e.preventDefault();
       setUrl(pastedText);
-      setError(null);
       setIsLoading(true);
 
       try {
@@ -157,10 +160,10 @@ export function AddVideoForm({
           setShowPlaylistImportDialog(true);
           setUrl('');
         } else {
-          setError('Could not fetch playlist or playlist is empty');
+          toast('Could not fetch playlist or playlist is empty');
         }
       } catch (err) {
-        setError('Failed to fetch playlist');
+        toast(getErrorMessage(err, 'Failed to fetch playlist'));
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -173,7 +176,6 @@ export function AddVideoForm({
     if (videoId && !url) {
       e.preventDefault();
       setUrl(pastedText);
-      setError(null);
       setIsLoading(true);
 
       try {
@@ -182,10 +184,10 @@ export function AddVideoForm({
           onAddVideo(video);
           setUrl('');
         } else {
-          setError('Could not fetch video information');
+          toast('Could not fetch video information');
         }
       } catch (err) {
-        setError('Failed to add video');
+        toast(getErrorMessage(err, 'Failed to add video'));
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -203,22 +205,17 @@ export function AddVideoForm({
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="relative">
+      <form onSubmit={handleSubmit}>
         <div className="flex gap-2">
           <div className="flex-1 relative">
             <input
               type="text"
               value={url}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                setError(null);
-              }}
+              onChange={(e) => setUrl(e.target.value)}
               onPaste={handlePaste}
               placeholder="Paste YouTube URL, playlist, or channel..."
               disabled={isLoading}
-              className={`w-full px-4 py-2 pr-10 bg-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 ${
-                error ? 'ring-2 ring-red-500' : ''
-              }`}
+              className="w-full px-4 py-2 pr-10 bg-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             />
             {isLoading && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -248,14 +245,6 @@ export function AddVideoForm({
             Add
           </button>
         </div>
-
-        {error && (
-          <p className="mt-2 text-sm text-red-400">{error}</p>
-        )}
-
-        <p className="mt-2 text-xs text-gray-500">
-          Supports videos, playlists, and channel URLs (@handle, /channel/, /c/)
-        </p>
       </form>
 
       {playlistImportData && (

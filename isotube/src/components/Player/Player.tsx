@@ -8,6 +8,7 @@ import {PauseIcon} from "../common/icons/PauseIcon.tsx";
 import {PlayIcon} from "../common/icons/PlayIcon.tsx";
 import {NextIcon} from "../common/icons/NextIcon.tsx";
 import {PlayPauseIcon} from "../common/icons/PlayPauseIcon.tsx";
+import {VolumeHighIcon, VolumeLowIcon, VolumeMuteIcon} from "../common/icons/VolumeIcons.tsx";
 
 interface PlayerProps {
   video: Video | null;
@@ -50,6 +51,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     duration,
     togglePlay,
     seekTo,
+    volume,
+    isMuted,
+    setVolume,
+    toggleMute,
   } = useYouTubePlayer({
     videoId: video?.id ?? null,
     startTime: video?.progress ?? 0,
@@ -154,6 +159,34 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
           <span className="text-xs text-gray-400 w-8 sm:w-10 hidden sm:block">
                         {formatTime(duration)}
                     </span>
+        </div>
+
+        {/* Volume control */}
+        <div className="group relative flex items-center">
+          <button
+            onClick={toggleMute}
+            className="p-1.5 sm:p-2 rounded hover:bg-gray-700 transition-colors"
+            title={isMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMuted || volume === 0 ? (
+              <VolumeMuteIcon/>
+            ) : volume < 50 ? (
+              <VolumeLowIcon/>
+            ) : (
+              <VolumeHighIcon/>
+            )}
+          </button>
+          <div className="w-0 opacity-0 group-hover:w-20 group-hover:opacity-100 overflow-hidden transition-all duration-200">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={isMuted ? 0 : volume}
+              onChange={(e) => setVolume(Number(e.target.value))}
+              className="w-20 h-1 accent-blue-500 cursor-pointer"
+              title={`Volume: ${isMuted ? 0 : volume}%`}
+            />
+          </div>
         </div>
 
         {/* Auto-advance toggle */}

@@ -17,8 +17,10 @@ function App() {
   const {
     playlists,
     activePlaylist,
+    playingPlaylist,
     currentVideo,
     currentVideoId,
+    currentVideoPlaylistId,
     setVideoProgress,
     setVideoStatus,
     playNext,
@@ -31,31 +33,32 @@ function App() {
     addVideos,
     createPlaylistWithVideos,
     createSubscription,
+    watchLaterPlaylist,
   } = usePlaylistsContext();
 
   const [autoAdvance, setAutoAdvance] = useState(true);
 
   const playerRef = useRef<PlayerHandle>(null);
 
-  // Find current video index for prev/next
-  const currentIndex = activePlaylist?.videos.findIndex(v => v.id === currentVideoId) ?? -1;
-  const hasNext = currentIndex >= 0 && currentIndex < (activePlaylist?.videos.length ?? 0) - 1;
+  // Find current video index for prev/next (in the playlist it was started from)
+  const currentIndex = playingPlaylist?.videos.findIndex(v => v.id === currentVideoId) ?? -1;
+  const hasNext = currentIndex >= 0 && currentIndex < (playingPlaylist?.videos.length ?? 0) - 1;
   const hasPrevious = currentIndex > 0;
 
-  // Handle progress updates
+  // Handle progress updates (track on the playlist the video was started from)
   const handleProgress = useCallback((seconds: number) => {
-    if (activePlaylist && currentVideoId) {
-      setVideoProgress(activePlaylist.id, currentVideoId, seconds);
+    if (currentVideoPlaylistId && currentVideoId) {
+      setVideoProgress(currentVideoPlaylistId, currentVideoId, seconds);
     }
-  }, [activePlaylist, currentVideoId, setVideoProgress]);
+  }, [currentVideoPlaylistId, currentVideoId, setVideoProgress]);
 
   // Handle video ended
   const handleEnded = useCallback(() => {
-    if (activePlaylist && currentVideoId) {
-      setVideoStatus(activePlaylist.id, currentVideoId, 'completed');
-      setVideoProgress(activePlaylist.id, currentVideoId, 0);
+    if (currentVideoPlaylistId && currentVideoId) {
+      setVideoStatus(currentVideoPlaylistId, currentVideoId, 'completed');
+      setVideoProgress(currentVideoPlaylistId, currentVideoId, 0);
     }
-  }, [activePlaylist, currentVideoId, setVideoStatus, setVideoProgress]);
+  }, [currentVideoPlaylistId, currentVideoId, setVideoStatus, setVideoProgress]);
 
   useKeyboardShortcuts({
     onPlayPause: () => playerRef.current?.togglePlay(),
@@ -71,20 +74,12 @@ function App() {
         <Logo/>
         <h1 className="text-xl font-bold tracking-tight text-white">
           Iso-Tube
-          <small className="text-xs font-normal text-purple-400 px-4">
+          <small className="hidden sm:inline text-xs font-normal text-purple-400 px-4">
             Watch YouTube videos without the distraction
           </small>
         </h1>
-        <div className="ml-auto flex items-center gap-1">
-          <HelpDialog/>
-          <HeaderMenu/>
-        </div>
-      </header>
-
-      {/* Left column: Playlists + Videos stacked (desktop only) */}
-      <Sidebar className="hidden lg:flex">
         {activePlaylist && (
-          <div className="p-4 border-b border-gray-700">
+          <div className="hidden lg:block flex-1 max-w-xl mx-4">
             <AddVideoForm
               onAddVideo={(video) => addVideo(activePlaylist.id, video)}
               onAddVideos={addVideos}
@@ -95,17 +90,23 @@ function App() {
             />
           </div>
         )}
+        <div className="ml-auto flex items-center gap-1">
+          <HelpDialog/>
+          <HeaderMenu/>
+        </div>
+      </header>
+
+      {/* Left column: Playlists + Videos stacked (desktop only) */}
+      <Sidebar className="hidden lg:flex">
         <SidebarTabs
           activeTab={sidebarView}
           onTabChange={setSidebarView}
+          watchLaterCount={watchLaterPlaylist?.videos.length ?? 0}
           playlistCount={userPlaylists.length}
           subscriptionCount={subscriptions.length}
         />
-        {sidebarView === 'playlists' ? (
-          <PlaylistList/>
-        ) : (
-          <SubscriptionList/>
-        )}
+        {sidebarView === 'playlists' && <PlaylistList/>}
+        {sidebarView === 'subscriptions' && <SubscriptionList/>}
         <VideoList/>
       </Sidebar>
 
@@ -126,14 +127,12 @@ function App() {
         <SidebarTabs
           activeTab={sidebarView}
           onTabChange={setSidebarView}
+          watchLaterCount={watchLaterPlaylist?.videos.length ?? 0}
           playlistCount={userPlaylists.length}
           subscriptionCount={subscriptions.length}
         />
-        {sidebarView === 'playlists' ? (
-          <PlaylistList/>
-        ) : (
-          <SubscriptionList/>
-        )}
+        {sidebarView === 'playlists' && <PlaylistList/>}
+        {sidebarView === 'subscriptions' && <SubscriptionList/>}
         <VideoList/>
       </section>
 

@@ -24,6 +24,16 @@ declare namespace YT {
 
     getPlayerState(): number;
 
+    setVolume(volume: number): void;
+
+    getVolume(): number;
+
+    mute(): void;
+
+    unMute(): void;
+
+    isMuted(): boolean;
+
     destroy(): void;
   }
 
@@ -125,6 +135,13 @@ export function useYouTubePlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [volume, setVolumeState] = useState(() => {
+    const saved = localStorage.getItem('isotube-volume');
+    return saved !== null ? Number(saved) : 100;
+  });
+  const [isMuted, setIsMuted] = useState(() => {
+    return localStorage.getItem('isotube-muted') === 'true';
+  });
 
   // Store callbacks in refs to avoid recreating player
   const callbacksRef = useRef({onProgress, onEnded, onPause});
@@ -175,6 +192,13 @@ export function useYouTubePlayer({
           onReady: (event) => {
             if (!mounted) return;
             playerRef.current = event.target;
+            // Apply saved volume/mute state
+            const savedVolume = localStorage.getItem('isotube-volume');
+            const savedMuted = localStorage.getItem('isotube-muted') === 'true';
+            event.target.setVolume(savedVolume !== null ? Number(savedVolume) : 100);
+            if (savedMuted) {
+              event.target.mute();
+            }
             setIsReady(true);
             setDuration(event.target.getDuration());
           },
@@ -280,6 +304,31 @@ export function useYouTubePlayer({
     }
   }, [isPlaying, play, pause]);
 
+  const setVolume = useCallback((val: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(val)));
+    playerRef.current?.setVolume(clamped);
+    setVolumeState(clamped);
+    localStorage.setItem('isotube-volume', String(clamped));
+    // Unmute when user adjusts volume
+    if (clamped > 0 && isMuted) {
+      playerRef.current?.unMute();
+      setIsMuted(false);
+      localStorage.setItem('isotube-muted', 'false');
+    }
+  }, [isMuted]);
+
+  const toggleMute = useCallback(() => {
+    if (isMuted) {
+      playerRef.current?.unMute();
+      setIsMuted(false);
+      localStorage.setItem('isotube-muted', 'false');
+    } else {
+      playerRef.current?.mute();
+      setIsMuted(true);
+      localStorage.setItem('isotube-muted', 'true');
+    }
+  }, [isMuted]);
+
   return {
     containerRef,
     isReady,
@@ -290,5 +339,9 @@ export function useYouTubePlayer({
     pause,
     seekTo,
     togglePlay,
+    volume,
+    isMuted,
+    setVolume,
+    toggleMute,
   };
 }

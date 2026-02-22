@@ -31,13 +31,15 @@ export interface Subscription {
   createdAt: number;
 }
 
-export type SidebarView = 'playlists' | 'subscriptions';
+export type SidebarView = 'watch-later' | 'playlists' | 'subscriptions';
 
 export interface AppState {
   playlists: Playlist[];
   subscriptions: Subscription[];
   activePlaylistId: string | null;
   activeSubscriptionId: string | null;
+  activeUserPlaylistId: string | null;
   currentVideoId: string | null;
+  currentVideoPlaylistId: string | null;
   sidebarView: SidebarView;
 }

@@ -54,6 +54,19 @@ export function getThumbnailUrl(videoId: string, quality: 'default' | 'medium' |
 // YouTube Data API v3 key
 const YOUTUBE_API_KEY = 'AIzaSyDskb920QxjGsJRJUhZ5z3g5o3Z0j3T_M0';
 
+/**
+ * Build a descriptive error message from a failed YouTube API response.
+ */
+async function buildApiError(response: Response, context: string): Promise<string> {
+    let detail = '';
+    try {
+        const body = await response.json();
+        const msg = body?.error?.message;
+        if (msg) detail = ` — ${msg}`;
+    } catch { /* ignore parse errors */ }
+    return `${context}: ${response.status} ${response.statusText}${detail}`;
+}
+
 interface OEmbedResponse {
   title: string;
   author_name: string;
@@ -92,8 +105,7 @@ export async function fetchVideoMetadataFromAPI(videoId: string): Promise<{
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.error('Failed to fetch video metadata from YouTube API:', response.status);
-      return null;
+      throw new Error(await buildApiError(response, 'Failed to fetch video'));
     }
 
     const data: YouTubeAPIResponse = await response.json();
@@ -109,6 +121,8 @@ export async function fetchVideoMetadataFromAPI(videoId: string): Promise<{
       description: item.snippet.description,
     };
   } catch (error) {
+    // Re-throw API errors so callers can surface the message
+    if (error instanceof Error && error.message.startsWith('Failed to')) throw error;
     console.error('Error fetching video metadata from YouTube API:', error);
     return null;
   }
@@ -238,8 +252,7 @@ export async function fetchPlaylistMetadata(playlistId: string): Promise<Playlis
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            console.error('Failed to fetch playlist metadata:', response.status);
-            return null;
+            throw new Error(await buildApiError(response, 'Failed to fetch playlist'));
         }
 
         const data = await response.json();
@@ -256,6 +269,7 @@ export async function fetchPlaylistMetadata(playlistId: string): Promise<Playlis
             itemCount: item.contentDetails.itemCount,
         };
     } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Failed to')) throw error;
         console.error('Error fetching playlist metadata:', error);
         return null;
     }
@@ -281,7 +295,7 @@ export async function fetchPlaylistVideos(playlistId: string): Promise<PlaylistI
 
         const response = await fetch(url.toString());
         if (!response.ok) {
-            throw new Error(`Failed to fetch playlist items: ${response.status}`);
+            throw new Error(await buildApiError(response, 'Failed to fetch playlist videos'));
         }
 
         const data = await response.json();
@@ -445,8 +459,7 @@ async function fetchChannelById(channelId: string): Promise<ChannelMetadata | nu
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            console.error('Failed to fetch channel by ID:', response.status);
-            return null;
+            throw new Error(await buildApiError(response, 'Failed to fetch channel'));
         }
 
         const data: YouTubeChannelAPIResponse = await response.json();
@@ -463,6 +476,7 @@ async function fetchChannelById(channelId: string): Promise<ChannelMetadata | nu
             uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
         };
     } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Failed to')) throw error;
         console.error('Error fetching channel by ID:', error);
         return null;
     }
@@ -477,8 +491,7 @@ async function fetchChannelByUsername(username: string): Promise<ChannelMetadata
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            console.error('Failed to fetch channel by username:', response.status);
-            return null;
+            throw new Error(await buildApiError(response, 'Failed to fetch channel'));
         }
 
         const data: YouTubeChannelAPIResponse = await response.json();
@@ -495,13 +508,47 @@ async function fetchChannelByUsername(username: string): Promise<ChannelMetadata
             uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
         };
     } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Failed to')) throw error;
         console.error('Error fetching channel by username:', error);
         return null;
     }
 }
 
 /**
- * Search for a channel by handle or custom name
+ * Fetch channel metadata by @handle (e.g. @michaelkeithson)
+ * Uses the forHandle parameter on the Channels API (1 quota unit vs 100 for search)
+ */
+async function fetchChannelByHandle(handle: string): Promise<ChannelMetadata | null> {
+    const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&forHandle=${encodeURIComponent(handle)}&key=${YOUTUBE_API_KEY}`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(await buildApiError(response, 'Failed to fetch channel'));
+        }
+
+        const data: YouTubeChannelAPIResponse = await response.json();
+        const item = data.items?.[0];
+        if (!item) {
+            return null;
+        }
+
+        return {
+            id: item.id,
+            title: item.snippet.title,
+            description: item.snippet.description,
+            thumbnail: item.snippet.thumbnails.medium?.url ?? item.snippet.thumbnails.default?.url ?? '',
+            uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
+        };
+    } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Failed to')) throw error;
+        console.error('Error fetching channel by handle:', error);
+        return null;
+    }
+}
+
+/**
+ * Search for a channel by custom name (/c/ URLs)
  * Uses search API (higher quota cost) then fetches full channel details
  */
 async function fetchChannelBySearch(query: string): Promise<ChannelMetadata | null> {
@@ -510,8 +557,7 @@ async function fetchChannelBySearch(query: string): Promise<ChannelMetadata | nu
     try {
         const response = await fetch(searchUrl);
         if (!response.ok) {
-            console.error('Failed to search for channel:', response.status);
-            return null;
+            throw new Error(await buildApiError(response, 'Failed to search for channel'));
         }
 
         const data: YouTubeSearchAPIResponse = await response.json();
@@ -523,6 +569,7 @@ async function fetchChannelBySearch(query: string): Promise<ChannelMetadata | nu
         // Get full channel details including uploads playlist ID
         return fetchChannelById(item.id.channelId);
     } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Failed to')) throw error;
         console.error('Error searching for channel:', error);
         return null;
     }
@@ -538,8 +585,9 @@ export async function fetchChannelMetadata(identifier: ChannelIdentifier): Promi
         case 'user':
             return fetchChannelByUsername(identifier.value);
         case 'handle':
+            return fetchChannelByHandle(identifier.value);
         case 'custom':
-            // For @handle and /c/ URLs, we need to search
+            // For /c/ URLs, no direct API parameter exists — fall back to search
             return fetchChannelBySearch(identifier.value);
     }
 }
@@ -561,8 +609,7 @@ export async function fetchChannelVideos(
     try {
         const response = await fetch(url.toString());
         if (!response.ok) {
-            console.error('Failed to fetch channel videos:', response.status);
-            return [];
+            throw new Error(await buildApiError(response, 'Failed to fetch channel videos'));
         }
 
         const data = await response.json();
@@ -587,9 +634,20 @@ export async function fetchChannelVideos(
 
         return items;
     } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Failed to')) throw error;
         console.error('Error fetching channel videos:', error);
         return [];
     }
+}
+
+/**
+ * Fetch ALL videos from a channel's uploads playlist (with pagination)
+ */
+export async function fetchAllChannelVideos(
+    uploadsPlaylistId: string
+): Promise<Omit<Video, 'addedAt'>[]> {
+    const items = await fetchPlaylistVideos(uploadsPlaylistId);
+    return playlistItemsToVideos(items);
 }
 
 export interface ChannelImportResult {

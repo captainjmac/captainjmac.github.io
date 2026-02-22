@@ -1,5 +1,4 @@
 import type {Subscription} from '@/types';
-import {RefreshIcon} from '@/components/common/icons/RefreshIcon';
 import {ChannelIcon} from '@/components/common/icons/ChannelIcon';
 import {
   DropdownMenu,
@@ -9,6 +8,54 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {cn} from '@/lib/utils';
 
+export interface SubscriptionMenuProps {
+  isRefreshing: boolean;
+  isFetchingAll: boolean;
+  onRefresh: () => void;
+  onFetchAll: () => void;
+  onDelete: () => void;
+}
+
+export function SubscriptionMenuItems({
+  isRefreshing,
+  isFetchingAll,
+  onRefresh,
+  onFetchAll,
+  onDelete,
+}: SubscriptionMenuProps) {
+  return (
+    <>
+      <DropdownMenuItem
+        disabled={isRefreshing}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRefresh();
+        }}
+      >
+        {isRefreshing ? 'Refreshing...' : 'Refresh'}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        disabled={isFetchingAll}
+        onClick={(e) => {
+          e.stopPropagation();
+          onFetchAll();
+        }}
+      >
+        {isFetchingAll ? 'Fetching...' : 'Add all videos'}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        variant="destructive"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+      >
+        Unsubscribe
+      </DropdownMenuItem>
+    </>
+  );
+}
+
 interface SubscriptionItemProps {
   subscription: Subscription;
   videoCount: number;
@@ -16,6 +63,8 @@ interface SubscriptionItemProps {
   isRefreshing: boolean;
   onSelect: () => void;
   onRefresh: () => void;
+  onFetchAll: () => void;
+  isFetchingAll: boolean;
   onDelete: () => void;
 }
 
@@ -26,6 +75,8 @@ export function SubscriptionItem({
   isRefreshing,
   onSelect,
   onRefresh,
+  onFetchAll,
+  isFetchingAll,
   onDelete,
 }: SubscriptionItemProps) {
   const formatLastRefreshed = (timestamp: number | null) => {
@@ -76,24 +127,6 @@ export function SubscriptionItem({
       {/* Video count */}
       <span className="text-xs text-gray-400">{videoCount}</span>
 
-      {/* Refresh button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRefresh();
-        }}
-        disabled={isRefreshing}
-        className={cn(
-          'p-1 rounded transition-all',
-          isRefreshing
-            ? 'animate-spin text-blue-400'
-            : 'opacity-0 group-hover:opacity-100 hover:bg-gray-600'
-        )}
-        title="Refresh videos"
-      >
-        <RefreshIcon className="w-4 h-4"/>
-      </button>
-
       {/* Menu button */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -107,15 +140,13 @@ export function SubscriptionItem({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-          >
-            Unsubscribe
-          </DropdownMenuItem>
+          <SubscriptionMenuItems
+            isRefreshing={isRefreshing}
+            isFetchingAll={isFetchingAll}
+            onRefresh={onRefresh}
+            onFetchAll={onFetchAll}
+            onDelete={onDelete}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

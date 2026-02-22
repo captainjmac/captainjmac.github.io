@@ -4,6 +4,8 @@ import {useLocalStorage} from './useLocalStorage';
 import type {Playlist, Video, VideoStatus, AppState, Subscription, SidebarView} from '@/types';
 import type {ChannelMetadata} from '@/utils/youtube';
 
+export const WATCH_LATER_ID = 'watch-later';
+
 const generateId = (): string => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
@@ -21,8 +23,10 @@ const DEFAULT_STATE: AppState = {
   subscriptions: [],
   activePlaylistId: null,
   activeSubscriptionId: null,
+  activeUserPlaylistId: null,
   currentVideoId: null,
-  sidebarView: 'playlists',
+  currentVideoPlaylistId: null,
+  sidebarView: 'watch-later',
 };
 
 // Migrate state from older versions
@@ -40,13 +44,29 @@ function migrateState(state: Partial<AppState>): AppState {
     }),
   }));
 
+  // Auto-create Watch Later playlist if missing
+  if (!playlists.find(p => p.id === WATCH_LATER_ID)) {
+    playlists.unshift({
+      id: WATCH_LATER_ID,
+      name: 'Watch Later',
+      videos: [],
+      createdAt: 0,
+    });
+  }
+
+  const sidebarView = state.sidebarView ?? 'watch-later';
+
   return {
     playlists,
     subscriptions: state.subscriptions ?? [],
-    activePlaylistId: state.activePlaylistId ?? null,
+    activePlaylistId: sidebarView === 'watch-later'
+      ? WATCH_LATER_ID
+      : (state.activePlaylistId ?? null),
     activeSubscriptionId: state.activeSubscriptionId ?? null,
+    activeUserPlaylistId: state.activeUserPlaylistId ?? null,
     currentVideoId: state.currentVideoId ?? null,
-    sidebarView: state.sidebarView ?? 'playlists',
+    currentVideoPlaylistId: state.currentVideoPlaylistId ?? null,
+    sidebarView,
   };
 }
 
@@ -65,15 +85,24 @@ export function usePlaylists() {
   // Get active playlist
   const activePlaylist = state.playlists.find(p => p.id === state.activePlaylistId) ?? null;
 
-  // Get current video
-  const currentVideo = activePlaylist?.videos.find(v => v.id === state.currentVideoId) ?? null;
+  // Get the playlist the currently playing video belongs to
+  const playingPlaylist = state.playlists.find(p => p.id === state.currentVideoPlaylistId) ?? null;
+
+  // Get current video from its originating playlist
+  const currentVideo = playingPlaylist?.videos.find(v => v.id === state.currentVideoId) ?? null;
 
   // Get active subscription
   const activeSubscription = state.subscriptions.find(s => s.id === state.activeSubscriptionId) ?? null;
 
-  // Get user-defined playlists (not linked to subscriptions)
+  // Get user-defined playlists (not linked to subscriptions, excludes Watch Later)
   const userPlaylists = useMemo(
-    () => state.playlists.filter(p => !p.linkedSubscriptionId),
+    () => state.playlists.filter(p => !p.linkedSubscriptionId && p.id !== WATCH_LATER_ID),
+    [state.playlists]
+  );
+
+  // Get Watch Later playlist
+  const watchLaterPlaylist = useMemo(
+    () => state.playlists.find(p => p.id === WATCH_LATER_ID) ?? null,
     [state.playlists]
   );
 
@@ -87,7 +116,10 @@ export function usePlaylists() {
     };
     setState(produce(draft => {
       draft.playlists.push(newPlaylist);
-      draft.activePlaylistId ??= newPlaylist.id;
+      if (!draft.activePlaylistId) {
+        draft.activePlaylistId = newPlaylist.id;
+        draft.activeUserPlaylistId = newPlaylist.id;
+      }
     }));
     return newPlaylist.id;
   }, [setState]);
@@ -108,7 +140,11 @@ export function usePlaylists() {
 
       if (draft.activePlaylistId === id) {
         draft.activePlaylistId = draft.playlists[0]?.id ?? null;
+        draft.activeUserPlaylistId = draft.activePlaylistId;
+      }
+      if (draft.currentVideoPlaylistId === id) {
         draft.currentVideoId = null;
+        draft.currentVideoPlaylistId = null;
       }
     }));
   }, [setState]);
@@ -116,7 +152,7 @@ export function usePlaylists() {
   const setActivePlaylist = useCallback((id: string | null) => {
     setState(produce(draft => {
       draft.activePlaylistId = id;
-      draft.currentVideoId = null;
+      draft.activeUserPlaylistId = id;
     }));
   }, [setState]);
 
@@ -149,6 +185,7 @@ export function usePlaylists() {
       }
       if (draft.currentVideoId === videoId) {
         draft.currentVideoId = null;
+        draft.currentVideoPlaylistId = null;
       }
     }));
   }, [setState]);
@@ -227,26 +264,32 @@ export function usePlaylists() {
   const setCurrentVideo = useCallback((videoId: string | null) => {
     setState(produce(draft => {
       draft.currentVideoId = videoId;
+      draft.currentVideoPlaylistId = videoId ? draft.activePlaylistId : null;
     }));
   }, [setState]);
 
   const playNext = useCallback(() => {
-    if (!activePlaylist || !state.currentVideoId) return;
-    const currentIndex = activePlaylist.videos.findIndex(v => v.id === state.currentVideoId);
-    const nextVideo = activePlaylist.videos[currentIndex + 1];
+    if (!playingPlaylist || !state.currentVideoId) return;
+    const currentIndex = playingPlaylist.videos.findIndex(v => v.id === state.currentVideoId);
+    const nextVideo = playingPlaylist.videos[currentIndex + 1];
     if (nextVideo) {
-      setCurrentVideo(nextVideo.id);
+      // Set video directly without changing currentVideoPlaylistId (stay in same playlist)
+      setState(produce(draft => {
+        draft.currentVideoId = nextVideo.id;
+      }));
     }
-  }, [activePlaylist, state.currentVideoId, setCurrentVideo]);
+  }, [playingPlaylist, state.currentVideoId, setState]);
 
   const playPrevious = useCallback(() => {
-    if (!activePlaylist || !state.currentVideoId) return;
-    const currentIndex = activePlaylist.videos.findIndex(v => v.id === state.currentVideoId);
-    const prevVideo = activePlaylist.videos[currentIndex - 1];
+    if (!playingPlaylist || !state.currentVideoId) return;
+    const currentIndex = playingPlaylist.videos.findIndex(v => v.id === state.currentVideoId);
+    const prevVideo = playingPlaylist.videos[currentIndex - 1];
     if (prevVideo) {
-      setCurrentVideo(prevVideo.id);
+      setState(produce(draft => {
+        draft.currentVideoId = prevVideo.id;
+      }));
     }
-  }, [activePlaylist, state.currentVideoId, setCurrentVideo]);
+  }, [playingPlaylist, state.currentVideoId, setState]);
 
   // Import/export state
   const importState = useCallback((newState: AppState) => {
@@ -319,7 +362,10 @@ export function usePlaylists() {
         draft.activeSubscriptionId = draft.subscriptions[0]?.id ?? null;
         draft.activePlaylistId = draft.subscriptions[0]?.linkedPlaylistId ?? null;
       }
-      draft.currentVideoId = null;
+      if (draft.currentVideoPlaylistId === subscription.linkedPlaylistId) {
+        draft.currentVideoId = null;
+        draft.currentVideoPlaylistId = null;
+      }
     }));
   }, [setState]);
 
@@ -330,7 +376,6 @@ export function usePlaylists() {
         const subscription = draft.subscriptions.find(s => s.id === subscriptionId);
         draft.activePlaylistId = subscription?.linkedPlaylistId ?? null;
       }
-      draft.currentVideoId = null;
     }));
   }, [setState]);
 
@@ -363,6 +408,14 @@ export function usePlaylists() {
   const setSidebarView = useCallback((view: SidebarView) => {
     setState(produce(draft => {
       draft.sidebarView = view;
+      if (view === 'watch-later') {
+        draft.activePlaylistId = WATCH_LATER_ID;
+      } else if (view === 'playlists') {
+        draft.activePlaylistId = draft.activeUserPlaylistId;
+      } else if (view === 'subscriptions') {
+        const sub = draft.subscriptions.find(s => s.id === draft.activeSubscriptionId);
+        draft.activePlaylistId = sub?.linkedPlaylistId ?? null;
+      }
     }));
   }, [setState]);
 
@@ -377,10 +430,13 @@ export function usePlaylists() {
     // State
     playlists: state.playlists,
     userPlaylists,
+    watchLaterPlaylist,
     activePlaylist,
+    playingPlaylist,
     currentVideo,
     activePlaylistId: state.activePlaylistId,
     currentVideoId: state.currentVideoId,
+    currentVideoPlaylistId: state.currentVideoPlaylistId,
 
     // Playlist operations
     createPlaylist,
