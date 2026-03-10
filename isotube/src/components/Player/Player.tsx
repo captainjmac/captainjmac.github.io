@@ -1,4 +1,4 @@
-import {forwardRef, useImperativeHandle} from 'react';
+import {forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState} from 'react';
 import {useYouTubePlayer} from '@/hooks/useYouTubePlayer.ts';
 import type {Video} from '@/types';
 import {NoVideoIcon} from "../common/icons/NoVideoIcon.tsx";
@@ -9,6 +9,7 @@ import {PlayIcon} from "../common/icons/PlayIcon.tsx";
 import {NextIcon} from "../common/icons/NextIcon.tsx";
 import {PlayPauseIcon} from "../common/icons/PlayPauseIcon.tsx";
 import {VolumeHighIcon, VolumeLowIcon, VolumeMuteIcon} from "../common/icons/VolumeIcons.tsx";
+import {FullscreenEnterIcon, FullscreenExitIcon} from "../common/icons/FullscreenIcon.tsx";
 
 interface PlayerProps {
   video: Video | null;
@@ -74,6 +75,44 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     togglePlay,
   }), [togglePlay]);
 
+  const fullscreenRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      if (e.key.toLowerCase() === 'f' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        if (fullscreenRef.current) {
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            fullscreenRef.current.requestFullscreen();
+          }
+        }
+      }
+    };
+    document.addEventListener('fullscreenchange', handleChange);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!fullscreenRef.current) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      fullscreenRef.current.requestFullscreen();
+    }
+  }, []);
+
   if (!video) {
     return (
       <div className="bg-black aspect-video max-h-[50vh] flex items-center justify-center">
@@ -89,9 +128,9 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   }
 
   return (
-    <div className="bg-black flex flex-col">
+    <div ref={fullscreenRef} className="bg-black flex flex-col">
       {/* Video container */}
-      <div className="aspect-video max-h-[65vh] relative">
+      <div className={`aspect-video relative ${isFullscreen ? 'flex-1 max-h-none' : 'max-h-[65vh]'}`}>
         <div ref={containerRef} className="w-full h-full"/>
         {!isReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
@@ -201,6 +240,15 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
         >
           <PlayPauseIcon/>
           <span className="hidden sm:inline">Auto</span>
+        </button>
+
+        {/* Fullscreen toggle */}
+        <button
+          onClick={toggleFullscreen}
+          className="p-1.5 sm:p-2 rounded hover:bg-gray-700 transition-colors"
+          title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
+        >
+          {isFullscreen ? <FullscreenExitIcon/> : <FullscreenEnterIcon/>}
         </button>
       </div>
 

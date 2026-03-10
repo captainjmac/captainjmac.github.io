@@ -116,6 +116,12 @@ export const VideoCard = memo(function VideoCard({
             {statusLabels[video.status]}
           </span>
 
+          {video.uploadDate && (
+            <span className="text-xs text-gray-500">
+              {new Date(video.uploadDate).toLocaleDateString()}
+            </span>
+          )}
+
           {/* Rating stars */}
           {video.rating > 0 && (
             <span className="text-yellow-400 text-xs">

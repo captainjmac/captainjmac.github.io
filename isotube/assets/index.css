@@ -848,6 +848,10 @@
     max-height: 90vh;
   }
 
+  .max-h-none {
+    max-height: none;
+  }
+
   .min-h-0 {
     min-height: calc(var(--spacing) * 0);
   }
@@ -1787,10 +1791,6 @@
     color: var(--color-red-200);
   }
 
-  .text-red-400 {
-    color: var(--color-red-400);
-  }
-
   .text-white {
     color: var(--color-white);
   }
@@ -1958,10 +1958,6 @@
 
   .ring-blue-500 {
     --tw-ring-color: var(--color-blue-500);
-  }
-
-  .ring-red-500 {
-    --tw-ring-color: var(--color-red-500);
   }
 
   .outline-hidden {
