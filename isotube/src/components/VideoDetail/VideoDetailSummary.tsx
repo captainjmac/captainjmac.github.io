@@ -4,9 +4,12 @@ import {CalendarIcon} from '@/components/common/icons/CalendarIcon';
 import {NotesIcon} from '@/components/common/icons/NotesIcon';
 import {DescriptionIcon} from '@/components/common/icons/DescriptionIcon';
 import {StarIcon} from '@/components/common/icons/StarIcon';
+import {VideoActionsDropdown} from '@/components/common/VideoActionsDropdown';
 
 interface VideoDetailSummaryProps {
   video: Video | null;
+  onUpdate?: (updates: Partial<Video>) => void;
+  onDelete?: () => void;
 }
 
 function ReadOnlyStars({rating}: { rating: number }) {
@@ -38,7 +41,7 @@ function formatUploadDate(dateStr: string | undefined): string | null {
   }
 }
 
-export function VideoDetailSummary({video}: VideoDetailSummaryProps) {
+export function VideoDetailSummary({video, onUpdate, onDelete}: VideoDetailSummaryProps) {
   const {description, isLoading} = useVideoDescription(video?.id ?? null);
 
   if (!video) {
@@ -52,22 +55,29 @@ export function VideoDetailSummary({video}: VideoDetailSummaryProps) {
 
   return (
     <div className="p-4 space-y-4 text-sm overflow-y-auto min-h-0">
-      {/* Meta row: upload date and rating */}
-      {(uploadDate || hasRating) && (
-        <div className="flex flex-wrap items-center gap-4 text-gray-400">
-          {uploadDate && (
-            <div className="flex items-center gap-1.5">
-              <CalendarIcon className="w-4 h-4" />
-              <span>{uploadDate}</span>
-            </div>
-          )}
-          {hasRating && (
-            <div className="flex items-center gap-1.5">
-              <ReadOnlyStars rating={video.rating}/>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Meta row: upload date, rating, and actions */}
+      <div className="flex flex-wrap items-center gap-4 text-gray-400">
+        {uploadDate && (
+          <div className="flex items-center gap-1.5">
+            <CalendarIcon className="w-4 h-4" />
+            <span>{uploadDate}</span>
+          </div>
+        )}
+        {hasRating && (
+          <div className="flex items-center gap-1.5">
+            <ReadOnlyStars rating={video.rating}/>
+          </div>
+        )}
+        {onUpdate && onDelete && (
+          <div className="ml-auto">
+            <VideoActionsDropdown
+              video={video}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+            />
+          </div>
+        )}
+      </div>
 
       {/* User notes */}
       {hasNotes && (

@@ -1,4 +1,5 @@
 import {useCallback, useRef, useState} from 'react';
+import type {Video} from '@/types';
 import {usePlaylistsContext} from './hooks/PlaylistsContext';
 import {useKeyboardShortcuts} from './hooks/useKeyboardShortcuts';
 import {Sidebar} from './components/Sidebar/Sidebar';
@@ -34,6 +35,8 @@ function App() {
     createPlaylistWithVideos,
     createSubscription,
     watchLaterPlaylist,
+    updateVideo,
+    deleteVideo,
   } = usePlaylistsContext();
 
   const [autoAdvance, setAutoAdvance] = useState(true);
@@ -59,6 +62,19 @@ function App() {
       setVideoProgress(currentVideoPlaylistId, currentVideoId, 0);
     }
   }, [currentVideoPlaylistId, currentVideoId, setVideoStatus, setVideoProgress]);
+
+  // Callbacks for video detail actions
+  const handleDetailUpdate = useCallback((updates: Partial<Video>) => {
+    if (currentVideoPlaylistId && currentVideoId) {
+      updateVideo(currentVideoPlaylistId, currentVideoId, updates);
+    }
+  }, [currentVideoPlaylistId, currentVideoId, updateVideo]);
+
+  const handleDetailDelete = useCallback(() => {
+    if (currentVideoPlaylistId && currentVideoId) {
+      deleteVideo(currentVideoPlaylistId, currentVideoId);
+    }
+  }, [currentVideoPlaylistId, currentVideoId, deleteVideo]);
 
   useKeyboardShortcuts({
     onPlayPause: () => playerRef.current?.togglePlay(),
@@ -152,6 +168,8 @@ function App() {
         />
         <VideoDetailSummary
           video={currentVideo}
+          onUpdate={handleDetailUpdate}
+          onDelete={handleDetailDelete}
         />
       </main>
     </div>

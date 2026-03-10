@@ -9,6 +9,7 @@ export interface Video {
   rating: number;       // 0-5 stars
   status: VideoStatus;
   progress: number;     // Seconds watched
+  starred?: boolean;    // Favorited by user
   addedAt: number;      // Timestamp
   uploadDate?: string;  // YouTube upload date (ISO string)
 }

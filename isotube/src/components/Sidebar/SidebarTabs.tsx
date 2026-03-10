@@ -13,8 +13,6 @@ export function SidebarTabs({
   activeTab,
   onTabChange,
   watchLaterCount,
-  playlistCount,
-  subscriptionCount,
 }: SidebarTabsProps) {
   return (
     <div className="flex border-b border-gray-700">

@@ -2,7 +2,7 @@ import {useMemo} from "react";
 import type {Video} from "@/types";
 
 interface VideoFilterSelectorProps {
-  value: "all" | "unwatched" | "in_progress" | "completed";
+  value: "all" | "unwatched" | "in_progress" | "completed" | "starred";
   onChange: (e: any) => void;
   videos: Video[]
 }
@@ -11,6 +11,7 @@ export function VideoFilterSelector({value, onChange, videos}: VideoFilterSelect
 
   const counts = useMemo(() => ({
     all: videos.length,
+    starred: videos.filter(v => v.starred).length,
     unwatched: videos.filter(v => v.status === 'unwatched').length,
     in_progress: videos.filter(v => v.status === 'in_progress').length,
     completed: videos.filter(v => v.status === 'completed').length,
@@ -26,6 +27,7 @@ export function VideoFilterSelector({value, onChange, videos}: VideoFilterSelect
           className="appearance-none w-full bg-gray-700 text-sm rounded pl-2 pr-7 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
         >
           <option value="all">All ({counts.all})</option>
+          <option value="starred">Starred ({counts.starred})</option>
           <option value="unwatched">Unwatched ({counts.unwatched})</option>
           <option value="in_progress">In Progress ({counts.in_progress})</option>
           <option value="completed">Completed ({counts.completed})</option>

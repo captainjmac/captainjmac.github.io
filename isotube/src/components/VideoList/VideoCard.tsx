@@ -1,67 +1,36 @@
-import {useState} from 'react';
-import type {Video, VideoStatus} from '@/types';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {usePlaylistsContext} from "@/hooks/PlaylistsContext.tsx";
+import {memo, useState} from 'react';
+import type {Video} from '@/types';
+import {VideoActionsDropdown, statusColors, statusLabels} from '@/components/common/VideoActionsDropdown';
 
 interface VideoCardProps {
   video: Video;
   isPlaying: boolean;
   onShowDetail: () => void;
+  onPlay: () => void;
+  onUpdate: (updates: Partial<Video>) => void;
+  onDelete: () => void;
 }
 
-const statusColors: Record<VideoStatus, string> = {
-  unwatched: 'bg-gray-500',
-  in_progress: 'bg-yellow-500',
-  completed: 'bg-green-500',
-};
-
-const statusLabels: Record<VideoStatus, string> = {
-  unwatched: 'Unwatched',
-  in_progress: 'In Progress',
-  completed: 'Completed',
-};
-
-export function VideoCard({
+export const VideoCard = memo(function VideoCard({
   video,
   isPlaying,
   onShowDetail,
+  onPlay,
+  onUpdate,
+  onDelete,
 }: VideoCardProps) {
-
-  const {
-    activePlaylist,
-    setCurrentVideo,
-    updateVideo,
-    deleteVideo,
-  } = usePlaylistsContext();
 
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(video.title);
 
-  if (!activePlaylist) {
-    return null;
-  }
-
   const handleSaveTitle = () => {
     if (editTitle.trim() && editTitle !== video.title) {
-      handleUpdate({title: editTitle.trim()});
+      onUpdate({title: editTitle.trim()});
     }
     setIsEditing(false);
   };
 
-  const handleStatusChange = (status: VideoStatus) => {
-    handleUpdate({status});
-  };
-
-  const handleUpdate = (updates: Partial<Video>) => {
-    updateVideo(activePlaylist.id, video.id, updates);
-  }
+  const handleEditTitle = () => setIsEditing(true);
 
   return (
     <div
@@ -70,7 +39,7 @@ export function VideoCard({
           ? 'bg-blue-600/20 ring-2 ring-blue-500'
           : 'bg-gray-800 hover:bg-gray-750'
       }`}
-      onClick={() => setCurrentVideo(video.id)}
+      onClick={onPlay}
     >
       {/* Thumbnail */}
       <div className="relative flex-shrink-0 w-16 aspect-video rounded overflow-hidden bg-gray-700">
@@ -120,8 +89,20 @@ export function VideoCard({
           </h3>
         )}
 
-        {/* Status badge */}
+        {/* Star + Status badge */}
         <div className="mt-auto pt-2 flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onUpdate({ starred: !video.starred });
+            }}
+            className={`text-sm leading-none hover:scale-110 transition-transform ${
+              video.starred ? 'text-yellow-400' : 'text-gray-500 hover:text-gray-400'
+            }`}
+            title={video.starred ? 'Unstar' : 'Star'}
+          >
+            {video.starred ? '★' : '☆'}
+          </button>
           <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
               video.status === 'completed'
@@ -146,47 +127,13 @@ export function VideoCard({
       </div>
 
       {/* Menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-          <button className="p-1 rounded hover:bg-gray-600 transition-colors flex-shrink-0">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
-            </svg>
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[160px]">
-          <DropdownMenuItem onClick={onShowDetail}>
-            Details & Notes
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setIsEditing(true)}>
-            Edit title
-          </DropdownMenuItem>
-
-          <DropdownMenuSeparator/>
-          <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-            Mark as
-          </DropdownMenuLabel>
-
-          {(['unwatched', 'in_progress', 'completed'] as VideoStatus[]).map((status) => (
-            <DropdownMenuItem
-              key={status}
-              onClick={() => handleStatusChange(status)}
-              className={video.status === status ? 'text-blue-400' : ''}
-            >
-              <span className={`w-2 h-2 rounded-full ${statusColors[status]}`}/>
-              {statusLabels[status]}
-            </DropdownMenuItem>
-          ))}
-
-          <DropdownMenuSeparator/>
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() => deleteVideo(activePlaylist.id, video.id)}
-          >
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <VideoActionsDropdown
+        video={video}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        onShowDetail={onShowDetail}
+        onEditTitle={handleEditTitle}
+      />
     </div>
   );
-}
+}, (prev, next) => prev.video === next.video && prev.isPlaying === next.isPlaying);

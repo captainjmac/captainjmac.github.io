@@ -9,7 +9,7 @@ import {VideoFilterSelector} from "@/components/VideoList/VideoFilterSelector.ts
 import {VideoSortSelector} from "@/components/VideoList/VideoSortSelector.tsx";
 
 type SortOption = 'added' | 'title' | 'rating' | 'status' | 'uploaded';
-type FilterStatus = 'all' | VideoStatus;
+type FilterStatus = 'all' | 'starred' | VideoStatus;
 
 interface VideoListProps {
 }
@@ -25,7 +25,9 @@ export function VideoList({}: VideoListProps) {
   const {
     activePlaylist,
     currentVideo,
+    setCurrentVideo,
     updateVideo,
+    deleteVideo,
     sidebarView,
   } = usePlaylistsContext();
 
@@ -42,7 +44,9 @@ export function VideoList({}: VideoListProps) {
     let videos = [...playlist.videos];
 
     // Filter
-    if (filterStatus !== 'all') {
+    if (filterStatus === 'starred') {
+      videos = videos.filter(v => v.starred);
+    } else if (filterStatus !== 'all') {
       videos = videos.filter(v => v.status === filterStatus);
     }
 
@@ -126,6 +130,9 @@ export function VideoList({}: VideoListProps) {
                 video={video}
                 isPlaying={video.id === currentVideoId}
                 onShowDetail={() => setDetailVideoId(video.id)}
+                onPlay={() => setCurrentVideo(video.id)}
+                onUpdate={(updates) => updateVideo(playlist.id, video.id, updates)}
+                onDelete={() => deleteVideo(playlist.id, video.id)}
               />
             ))}
           </div>

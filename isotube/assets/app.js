@@ -13309,6 +13309,7 @@ function useLocalStorage(key, initialValue) {
   }, []);
   return [storedValue, setValue];
 }
+const WATCH_LATER_ID = "watch-later";
 const generateId = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -13324,8 +13325,10 @@ const DEFAULT_STATE = {
   subscriptions: [],
   activePlaylistId: null,
   activeSubscriptionId: null,
+  activeUserPlaylistId: null,
   currentVideoId: null,
-  sidebarView: "playlists"
+  currentVideoPlaylistId: null,
+  sidebarView: "watch-later"
 };
 function migrateState(state) {
   const playlists = (state.playlists ?? []).map((playlist) => ({
@@ -13338,13 +13341,24 @@ function migrateState(state) {
       return v;
     })
   }));
+  if (!playlists.find((p) => p.id === WATCH_LATER_ID)) {
+    playlists.unshift({
+      id: WATCH_LATER_ID,
+      name: "Watch Later",
+      videos: [],
+      createdAt: 0
+    });
+  }
+  const sidebarView = state.sidebarView ?? "watch-later";
   return {
     playlists,
     subscriptions: state.subscriptions ?? [],
-    activePlaylistId: state.activePlaylistId ?? null,
+    activePlaylistId: sidebarView === "watch-later" ? WATCH_LATER_ID : state.activePlaylistId ?? null,
     activeSubscriptionId: state.activeSubscriptionId ?? null,
+    activeUserPlaylistId: state.activeUserPlaylistId ?? null,
     currentVideoId: state.currentVideoId ?? null,
-    sidebarView: state.sidebarView ?? "playlists"
+    currentVideoPlaylistId: state.currentVideoPlaylistId ?? null,
+    sidebarView
   };
 }
 function usePlaylists() {
@@ -13354,10 +13368,15 @@ function usePlaylists() {
     setRawState((prev) => updater(migrateState(prev)));
   }, [setRawState]);
   const activePlaylist = state.playlists.find((p) => p.id === state.activePlaylistId) ?? null;
-  const currentVideo = activePlaylist?.videos.find((v) => v.id === state.currentVideoId) ?? null;
+  const playingPlaylist = state.playlists.find((p) => p.id === state.currentVideoPlaylistId) ?? null;
+  const currentVideo = playingPlaylist?.videos.find((v) => v.id === state.currentVideoId) ?? null;
   const activeSubscription = state.subscriptions.find((s) => s.id === state.activeSubscriptionId) ?? null;
   const userPlaylists = reactExports.useMemo(
-    () => state.playlists.filter((p) => !p.linkedSubscriptionId),
+    () => state.playlists.filter((p) => !p.linkedSubscriptionId && p.id !== WATCH_LATER_ID),
+    [state.playlists]
+  );
+  const watchLaterPlaylist = reactExports.useMemo(
+    () => state.playlists.find((p) => p.id === WATCH_LATER_ID) ?? null,
     [state.playlists]
   );
   const createPlaylist = reactExports.useCallback((name) => {
@@ -13369,7 +13388,10 @@ function usePlaylists() {
     };
     setState(produce((draft) => {
       draft.playlists.push(newPlaylist);
-      draft.activePlaylistId ??= newPlaylist.id;
+      if (!draft.activePlaylistId) {
+        draft.activePlaylistId = newPlaylist.id;
+        draft.activeUserPlaylistId = newPlaylist.id;
+      }
     }));
     return newPlaylist.id;
   }, [setState]);
@@ -13386,14 +13408,18 @@ function usePlaylists() {
       draft.playlists.splice(index2, 1);
       if (draft.activePlaylistId === id) {
         draft.activePlaylistId = draft.playlists[0]?.id ?? null;
+        draft.activeUserPlaylistId = draft.activePlaylistId;
+      }
+      if (draft.currentVideoPlaylistId === id) {
         draft.currentVideoId = null;
+        draft.currentVideoPlaylistId = null;
       }
     }));
   }, [setState]);
   const setActivePlaylist = reactExports.useCallback((id) => {
     setState(produce((draft) => {
       draft.activePlaylistId = id;
-      draft.currentVideoId = null;
+      draft.activeUserPlaylistId = id;
     }));
   }, [setState]);
   const addVideo = reactExports.useCallback((playlistId, video) => {
@@ -13422,6 +13448,7 @@ function usePlaylists() {
       }
       if (draft.currentVideoId === videoId) {
         draft.currentVideoId = null;
+        draft.currentVideoPlaylistId = null;
       }
     }));
   }, [setState]);
@@ -13484,24 +13511,29 @@ function usePlaylists() {
   const setCurrentVideo = reactExports.useCallback((videoId) => {
     setState(produce((draft) => {
       draft.currentVideoId = videoId;
+      draft.currentVideoPlaylistId = videoId ? draft.activePlaylistId : null;
     }));
   }, [setState]);
   const playNext = reactExports.useCallback(() => {
-    if (!activePlaylist || !state.currentVideoId) return;
-    const currentIndex = activePlaylist.videos.findIndex((v) => v.id === state.currentVideoId);
-    const nextVideo = activePlaylist.videos[currentIndex + 1];
+    if (!playingPlaylist || !state.currentVideoId) return;
+    const currentIndex = playingPlaylist.videos.findIndex((v) => v.id === state.currentVideoId);
+    const nextVideo = playingPlaylist.videos[currentIndex + 1];
     if (nextVideo) {
-      setCurrentVideo(nextVideo.id);
+      setState(produce((draft) => {
+        draft.currentVideoId = nextVideo.id;
+      }));
     }
-  }, [activePlaylist, state.currentVideoId, setCurrentVideo]);
+  }, [playingPlaylist, state.currentVideoId, setState]);
   const playPrevious = reactExports.useCallback(() => {
-    if (!activePlaylist || !state.currentVideoId) return;
-    const currentIndex = activePlaylist.videos.findIndex((v) => v.id === state.currentVideoId);
-    const prevVideo = activePlaylist.videos[currentIndex - 1];
+    if (!playingPlaylist || !state.currentVideoId) return;
+    const currentIndex = playingPlaylist.videos.findIndex((v) => v.id === state.currentVideoId);
+    const prevVideo = playingPlaylist.videos[currentIndex - 1];
     if (prevVideo) {
-      setCurrentVideo(prevVideo.id);
+      setState(produce((draft) => {
+        draft.currentVideoId = prevVideo.id;
+      }));
     }
-  }, [activePlaylist, state.currentVideoId, setCurrentVideo]);
+  }, [playingPlaylist, state.currentVideoId, setState]);
   const importState = reactExports.useCallback((newState) => {
     setState(() => newState);
   }, [setState]);
@@ -13553,7 +13585,10 @@ function usePlaylists() {
         draft.activeSubscriptionId = draft.subscriptions[0]?.id ?? null;
         draft.activePlaylistId = draft.subscriptions[0]?.linkedPlaylistId ?? null;
       }
-      draft.currentVideoId = null;
+      if (draft.currentVideoPlaylistId === subscription.linkedPlaylistId) {
+        draft.currentVideoId = null;
+        draft.currentVideoPlaylistId = null;
+      }
     }));
   }, [setState]);
   const setActiveSubscription = reactExports.useCallback((subscriptionId) => {
@@ -13563,7 +13598,6 @@ function usePlaylists() {
         const subscription = draft.subscriptions.find((s) => s.id === subscriptionId);
         draft.activePlaylistId = subscription?.linkedPlaylistId ?? null;
       }
-      draft.currentVideoId = null;
     }));
   }, [setState]);
   const refreshSubscription = reactExports.useCallback((subscriptionId, newVideos) => {
@@ -13584,6 +13618,14 @@ function usePlaylists() {
   const setSidebarView = reactExports.useCallback((view) => {
     setState(produce((draft) => {
       draft.sidebarView = view;
+      if (view === "watch-later") {
+        draft.activePlaylistId = WATCH_LATER_ID;
+      } else if (view === "playlists") {
+        draft.activePlaylistId = draft.activeUserPlaylistId;
+      } else if (view === "subscriptions") {
+        const sub = draft.subscriptions.find((s) => s.id === draft.activeSubscriptionId);
+        draft.activePlaylistId = sub?.linkedPlaylistId ?? null;
+      }
     }));
   }, [setState]);
   const getSubscriptionPlaylist = reactExports.useCallback((subscriptionId) => {
@@ -13595,10 +13637,13 @@ function usePlaylists() {
     // State
     playlists: state.playlists,
     userPlaylists,
+    watchLaterPlaylist,
     activePlaylist,
+    playingPlaylist,
     currentVideo,
     activePlaylistId: state.activePlaylistId,
     currentVideoId: state.currentVideoId,
+    currentVideoPlaylistId: state.currentVideoPlaylistId,
     // Playlist operations
     createPlaylist,
     renamePlaylist,
@@ -22067,39 +22112,78 @@ const statusLabels = {
   in_progress: "In Progress",
   completed: "Completed"
 };
-function VideoCard({
+function VideoActionsDropdown({
+  video,
+  onUpdate,
+  onDelete,
+  onShowDetail,
+  onEditTitle,
+  align = "end"
+}) {
+  const [copied, setCopied] = reactExports.useState(false);
+  const handleCopyUrl = () => {
+    navigator.clipboard.writeText(video.url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  const handleStatusChange = (status) => {
+    onUpdate({ status });
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(DropdownMenu, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuTrigger, { asChild: true, onClick: (e) => e.stopPropagation(), onPointerDown: (e) => e.stopPropagation(), children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "p-1 rounded hover:bg-gray-600 transition-colors flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "w-5 h-5", fill: "currentColor", viewBox: "0 0 20 20", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" }) }) }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(DropdownMenuContent, { align, className: "min-w-[160px]", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuItem, { onClick: handleCopyUrl, children: copied ? "Copied!" : "Copy URL" }),
+      onShowDetail && /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuItem, { onClick: onShowDetail, children: "Details & Notes" }),
+      onEditTitle && /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuItem, { onClick: onEditTitle, children: "Edit title" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuSeparator, {}),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuLabel, { className: "text-xs text-muted-foreground font-normal", children: "Mark as" }),
+      ["unwatched", "in_progress", "completed"].map((status) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        DropdownMenuItem,
+        {
+          onClick: () => handleStatusChange(status),
+          className: video.status === status ? "text-blue-400" : "",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-2 h-2 rounded-full ${statusColors[status]}` }),
+            statusLabels[status]
+          ]
+        },
+        status
+      )),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuSeparator, {}),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        DropdownMenuItem,
+        {
+          variant: "destructive",
+          onClick: onDelete,
+          children: "Delete"
+        }
+      )
+    ] })
+  ] });
+}
+const VideoCard = reactExports.memo(function VideoCard2({
   video,
   isPlaying,
-  onShowDetail
+  onShowDetail,
+  onPlay,
+  onUpdate,
+  onDelete
 }) {
-  const {
-    activePlaylist,
-    setCurrentVideo,
-    updateVideo,
-    deleteVideo
-  } = usePlaylistsContext();
   const [isEditing, setIsEditing] = reactExports.useState(false);
   const [editTitle, setEditTitle] = reactExports.useState(video.title);
-  if (!activePlaylist) {
-    return null;
-  }
   const handleSaveTitle = () => {
     if (editTitle.trim() && editTitle !== video.title) {
-      handleUpdate({ title: editTitle.trim() });
+      onUpdate({ title: editTitle.trim() });
     }
     setIsEditing(false);
   };
-  const handleStatusChange = (status) => {
-    handleUpdate({ status });
-  };
-  const handleUpdate = (updates) => {
-    updateVideo(activePlaylist.id, video.id, updates);
-  };
+  const handleEditTitle = () => setIsEditing(true);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
       className: `flex gap-3 p-2 rounded-lg cursor-pointer transition-all min-w-0 overflow-hidden ${isPlaying ? "bg-blue-600/20 ring-2 ring-blue-500" : "bg-gray-800 hover:bg-gray-750"}`,
-      onClick: () => setCurrentVideo(video.id),
+      onClick: onPlay,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative flex-shrink-0 w-16 aspect-video rounded overflow-hidden bg-gray-700", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -22141,6 +22225,18 @@ function VideoCard({
             }
           ) : /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "font-medium text-sm line-clamp-2", title: video.title, children: video.title }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-auto pt-2 flex items-center gap-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                onClick: (e) => {
+                  e.stopPropagation();
+                  onUpdate({ starred: !video.starred });
+                },
+                className: `text-sm leading-none hover:scale-110 transition-transform ${video.starred ? "text-yellow-400" : "text-gray-500 hover:text-gray-400"}`,
+                title: video.starred ? "Unstar" : "Star",
+                children: video.starred ? "★" : "☆"
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "span",
               {
@@ -22157,40 +22253,20 @@ function VideoCard({
             ] })
           ] })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(DropdownMenu, { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuTrigger, { asChild: true, onClick: (e) => e.stopPropagation(), children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "p-1 rounded hover:bg-gray-600 transition-colors flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "w-5 h-5", fill: "currentColor", viewBox: "0 0 20 20", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" }) }) }) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(DropdownMenuContent, { align: "end", className: "min-w-[160px]", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuItem, { onClick: onShowDetail, children: "Details & Notes" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuItem, { onClick: () => setIsEditing(true), children: "Edit title" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuSeparator, {}),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuLabel, { className: "text-xs text-muted-foreground font-normal", children: "Mark as" }),
-            ["unwatched", "in_progress", "completed"].map((status) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              DropdownMenuItem,
-              {
-                onClick: () => handleStatusChange(status),
-                className: video.status === status ? "text-blue-400" : "",
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `w-2 h-2 rounded-full ${statusColors[status]}` }),
-                  statusLabels[status]
-                ]
-              },
-              status
-            )),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuSeparator, {}),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              DropdownMenuItem,
-              {
-                variant: "destructive",
-                onClick: () => deleteVideo(activePlaylist.id, video.id),
-                children: "Delete"
-              }
-            )
-          ] })
-        ] })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          VideoActionsDropdown,
+          {
+            video,
+            onUpdate,
+            onDelete,
+            onShowDetail,
+            onEditTitle: handleEditTitle
+          }
+        )
       ]
     }
   );
-}
+}, (prev, next) => prev.video === next.video && prev.isPlaying === next.isPlaying);
 const sizeClasses = {
   sm: "w-4 h-4",
   md: "w-6 h-6",
@@ -22403,6 +22479,7 @@ function EmptyVideoListIcon() {
 function VideoFilterSelector({ value, onChange, videos }) {
   const counts = reactExports.useMemo(() => ({
     all: videos.length,
+    starred: videos.filter((v) => v.starred).length,
     unwatched: videos.filter((v) => v.status === "unwatched").length,
     in_progress: videos.filter((v) => v.status === "in_progress").length,
     completed: videos.filter((v) => v.status === "completed").length
@@ -22420,6 +22497,11 @@ function VideoFilterSelector({ value, onChange, videos }) {
             /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "all", children: [
               "All (",
               counts.all,
+              ")"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "starred", children: [
+              "Starred (",
+              counts.starred,
               ")"
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "unwatched", children: [
@@ -22494,7 +22576,10 @@ function VideoList({}) {
   const {
     activePlaylist,
     currentVideo,
-    updateVideo
+    setCurrentVideo,
+    updateVideo,
+    deleteVideo,
+    sidebarView
   } = usePlaylistsContext();
   const [sortBy, setSortBy] = reactExports.useState("uploaded");
   const [filterStatus, setFilterStatus] = reactExports.useState("all");
@@ -22504,7 +22589,9 @@ function VideoList({}) {
   const filteredVideos = reactExports.useMemo(() => {
     if (!playlist) return [];
     let videos = [...playlist.videos];
-    if (filterStatus !== "all") {
+    if (filterStatus === "starred") {
+      videos = videos.filter((v) => v.starred);
+    } else if (filterStatus !== "all") {
       videos = videos.filter((v) => v.status === filterStatus);
     }
     videos.sort((a, b) => {
@@ -22528,10 +22615,10 @@ function VideoList({}) {
     return videos;
   }, [playlist?.videos, sortBy, filterStatus]);
   if (!playlist) {
+    const message = sidebarView === "subscriptions" ? "Select a channel from the sidebar" : "Select a playlist from the sidebar";
     return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 flex items-center justify-center p-4", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(PlaylistIcon, {}),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 mb-2", children: "No playlist selected" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 text-sm", children: "Create or select a playlist from the sidebar" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 mb-2", children: message })
     ] }) });
   }
   const detailVideo = detailVideoId ? playlist.videos.find((v) => v.id === detailVideoId) ?? null : null;
@@ -22562,7 +22649,10 @@ function VideoList({}) {
       {
         video,
         isPlaying: video.id === currentVideoId,
-        onShowDetail: () => setDetailVideoId(video.id)
+        onShowDetail: () => setDetailVideoId(video.id),
+        onPlay: () => setCurrentVideo(video.id),
+        onUpdate: (updates) => updateVideo(playlist.id, video.id, updates),
+        onDelete: () => deleteVideo(playlist.id, video.id)
       },
       video.id
     )) }) }),
@@ -22603,13 +22693,22 @@ function getThumbnailUrl(videoId, quality = "medium") {
   return `https://img.youtube.com/vi/${videoId}/${qualityMap[quality]}.jpg`;
 }
 const YOUTUBE_API_KEY = "AIzaSyDskb920QxjGsJRJUhZ5z3g5o3Z0j3T_M0";
+async function buildApiError(response, context) {
+  let detail = "";
+  try {
+    const body = await response.json();
+    const msg = body?.error?.message;
+    if (msg) detail = ` — ${msg}`;
+  } catch {
+  }
+  return `${context}: ${response.status} ${response.statusText}${detail}`;
+}
 async function fetchVideoMetadataFromAPI(videoId) {
   const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`;
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.error("Failed to fetch video metadata from YouTube API:", response.status);
-      return null;
+      throw new Error(await buildApiError(response, "Failed to fetch video"));
     }
     const data = await response.json();
     const item = data.items?.[0];
@@ -22623,6 +22722,7 @@ async function fetchVideoMetadataFromAPI(videoId) {
       description: item.snippet.description
     };
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Failed to")) throw error;
     console.error("Error fetching video metadata from YouTube API:", error);
     return null;
   }
@@ -22693,8 +22793,7 @@ async function fetchPlaylistMetadata(playlistId) {
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.error("Failed to fetch playlist metadata:", response.status);
-      return null;
+      throw new Error(await buildApiError(response, "Failed to fetch playlist"));
     }
     const data = await response.json();
     const item = data.items?.[0];
@@ -22709,6 +22808,7 @@ async function fetchPlaylistMetadata(playlistId) {
       itemCount: item.contentDetails.itemCount
     };
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Failed to")) throw error;
     console.error("Error fetching playlist metadata:", error);
     return null;
   }
@@ -22727,7 +22827,7 @@ async function fetchPlaylistVideos(playlistId) {
     }
     const response = await fetch(url.toString());
     if (!response.ok) {
-      throw new Error(`Failed to fetch playlist items: ${response.status}`);
+      throw new Error(await buildApiError(response, "Failed to fetch playlist videos"));
     }
     const data = await response.json();
     for (const item of data.items ?? []) {
@@ -22799,8 +22899,7 @@ async function fetchChannelById(channelId) {
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.error("Failed to fetch channel by ID:", response.status);
-      return null;
+      throw new Error(await buildApiError(response, "Failed to fetch channel"));
     }
     const data = await response.json();
     const item = data.items?.[0];
@@ -22815,6 +22914,7 @@ async function fetchChannelById(channelId) {
       uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads
     };
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Failed to")) throw error;
     console.error("Error fetching channel by ID:", error);
     return null;
   }
@@ -22824,8 +22924,7 @@ async function fetchChannelByUsername(username) {
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.error("Failed to fetch channel by username:", response.status);
-      return null;
+      throw new Error(await buildApiError(response, "Failed to fetch channel"));
     }
     const data = await response.json();
     const item = data.items?.[0];
@@ -22840,7 +22939,33 @@ async function fetchChannelByUsername(username) {
       uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads
     };
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Failed to")) throw error;
     console.error("Error fetching channel by username:", error);
+    return null;
+  }
+}
+async function fetchChannelByHandle(handle) {
+  const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&forHandle=${encodeURIComponent(handle)}&key=${YOUTUBE_API_KEY}`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(await buildApiError(response, "Failed to fetch channel"));
+    }
+    const data = await response.json();
+    const item = data.items?.[0];
+    if (!item) {
+      return null;
+    }
+    return {
+      id: item.id,
+      title: item.snippet.title,
+      description: item.snippet.description,
+      thumbnail: item.snippet.thumbnails.medium?.url ?? item.snippet.thumbnails.default?.url ?? "",
+      uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Failed to")) throw error;
+    console.error("Error fetching channel by handle:", error);
     return null;
   }
 }
@@ -22849,8 +22974,7 @@ async function fetchChannelBySearch(query) {
   try {
     const response = await fetch(searchUrl);
     if (!response.ok) {
-      console.error("Failed to search for channel:", response.status);
-      return null;
+      throw new Error(await buildApiError(response, "Failed to search for channel"));
     }
     const data = await response.json();
     const item = data.items?.[0];
@@ -22859,6 +22983,7 @@ async function fetchChannelBySearch(query) {
     }
     return fetchChannelById(item.id.channelId);
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Failed to")) throw error;
     console.error("Error searching for channel:", error);
     return null;
   }
@@ -22870,6 +22995,7 @@ async function fetchChannelMetadata(identifier) {
     case "user":
       return fetchChannelByUsername(identifier.value);
     case "handle":
+      return fetchChannelByHandle(identifier.value);
     case "custom":
       return fetchChannelBySearch(identifier.value);
   }
@@ -22883,8 +23009,7 @@ async function fetchChannelVideos(uploadsPlaylistId, maxResults = 10) {
   try {
     const response = await fetch(url.toString());
     if (!response.ok) {
-      console.error("Failed to fetch channel videos:", response.status);
-      return [];
+      throw new Error(await buildApiError(response, "Failed to fetch channel videos"));
     }
     const data = await response.json();
     const items = [];
@@ -22905,9 +23030,14 @@ async function fetchChannelVideos(uploadsPlaylistId, maxResults = 10) {
     }
     return items;
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Failed to")) throw error;
     console.error("Error fetching channel videos:", error);
     return [];
   }
+}
+async function fetchAllChannelVideos(uploadsPlaylistId) {
+  const items = await fetchPlaylistVideos(uploadsPlaylistId);
+  return playlistItemsToVideos(items);
 }
 async function fetchChannelForSubscription(url) {
   const identifier = extractChannelIdentifier(url);
@@ -23588,6 +23718,51 @@ function ChannelSubscribeDialog({
     ] })
   ] }) });
 }
+const ToastContext = reactExports.createContext(null);
+let nextId = 0;
+function ToastProvider({ children }) {
+  const [toasts, setToasts] = reactExports.useState([]);
+  const addToast = reactExports.useCallback((message, type = "error") => {
+    const id = nextId++;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 6e3);
+  }, []);
+  const removeToast = reactExports.useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(ToastContext.Provider, { value: { toast: addToast }, children: [
+    children,
+    toasts.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-md", children: toasts.map((t) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: `flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border text-sm animate-in slide-in-from-right fade-in duration-200 ${t.type === "error" ? "bg-red-950 border-red-800 text-red-200" : t.type === "success" ? "bg-green-950 border-green-800 text-green-200" : "bg-gray-800 border-gray-700 text-gray-200"}`,
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "flex-1", children: t.message }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              onClick: () => removeToast(t.id),
+              className: "shrink-0 opacity-60 hover:opacity-100 transition-opacity",
+              children: "×"
+            }
+          )
+        ]
+      },
+      t.id
+    )) })
+  ] });
+}
+function useToast() {
+  const ctx = reactExports.useContext(ToastContext);
+  if (!ctx) throw new Error("useToast must be used within ToastProvider");
+  return ctx;
+}
+function getErrorMessage(err, fallback) {
+  if (err instanceof Error) return err.message;
+  return fallback;
+}
 function AddVideoForm({
   onAddVideo,
   onAddVideos,
@@ -23598,14 +23773,13 @@ function AddVideoForm({
 }) {
   const [url, setUrl] = reactExports.useState("");
   const [isLoading, setIsLoading] = reactExports.useState(false);
-  const [error, setError] = reactExports.useState(null);
+  const { toast } = useToast();
   const [showPlaylistImportDialog, setShowPlaylistImportDialog] = reactExports.useState(false);
   const [playlistImportData, setPlaylistImportData] = reactExports.useState(null);
   const [showChannelDialog, setShowChannelDialog] = reactExports.useState(false);
   const [channelData, setChannelData] = reactExports.useState(null);
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
     const trimmedUrl = url.trim();
     if (!trimmedUrl) return;
     if (isChannelUrl(trimmedUrl)) {
@@ -23617,10 +23791,10 @@ function AddVideoForm({
           setShowChannelDialog(true);
           setUrl("");
         } else {
-          setError("Could not fetch channel information");
+          toast("Could not find channel — it may not exist or has no public uploads");
         }
       } catch (err) {
-        setError("Failed to fetch channel");
+        toast(getErrorMessage(err, "Failed to fetch channel"));
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -23636,10 +23810,10 @@ function AddVideoForm({
           setShowPlaylistImportDialog(true);
           setUrl("");
         } else {
-          setError("Could not fetch playlist or playlist is empty");
+          toast("Could not fetch playlist or playlist is empty");
         }
       } catch (err) {
-        setError("Failed to fetch playlist");
+        toast(getErrorMessage(err, "Failed to fetch playlist"));
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -23648,7 +23822,7 @@ function AddVideoForm({
     }
     const videoId = extractVideoId(trimmedUrl);
     if (!videoId) {
-      setError("Invalid YouTube URL");
+      toast("Invalid YouTube URL");
       return;
     }
     setIsLoading(true);
@@ -23658,10 +23832,10 @@ function AddVideoForm({
         onAddVideo(video);
         setUrl("");
       } else {
-        setError("Could not fetch video information");
+        toast("Could not fetch video information");
       }
     } catch (err) {
-      setError("Failed to add video");
+      toast(getErrorMessage(err, "Failed to add video"));
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -23672,7 +23846,6 @@ function AddVideoForm({
     if (isChannelUrl(pastedText) && !url) {
       e.preventDefault();
       setUrl(pastedText);
-      setError(null);
       setIsLoading(true);
       try {
         const data = await fetchChannelForSubscription(pastedText);
@@ -23681,10 +23854,10 @@ function AddVideoForm({
           setShowChannelDialog(true);
           setUrl("");
         } else {
-          setError("Could not fetch channel information");
+          toast("Could not find channel — it may not exist or has no public uploads");
         }
       } catch (err) {
-        setError("Failed to fetch channel");
+        toast(getErrorMessage(err, "Failed to fetch channel"));
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -23694,7 +23867,6 @@ function AddVideoForm({
     if (isPlaylistUrl(pastedText) && !url) {
       e.preventDefault();
       setUrl(pastedText);
-      setError(null);
       setIsLoading(true);
       try {
         const importData = await fetchPlaylistForImport(pastedText);
@@ -23703,10 +23875,10 @@ function AddVideoForm({
           setShowPlaylistImportDialog(true);
           setUrl("");
         } else {
-          setError("Could not fetch playlist or playlist is empty");
+          toast("Could not fetch playlist or playlist is empty");
         }
       } catch (err) {
-        setError("Failed to fetch playlist");
+        toast(getErrorMessage(err, "Failed to fetch playlist"));
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -23717,7 +23889,6 @@ function AddVideoForm({
     if (videoId && !url) {
       e.preventDefault();
       setUrl(pastedText);
-      setError(null);
       setIsLoading(true);
       try {
         const video = await createVideoFromUrl(pastedText);
@@ -23725,10 +23896,10 @@ function AddVideoForm({
           onAddVideo(video);
           setUrl("");
         } else {
-          setError("Could not fetch video information");
+          toast("Could not fetch video information");
         }
       } catch (err) {
-        setError("Failed to add video");
+        toast(getErrorMessage(err, "Failed to add video"));
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -23742,59 +23913,52 @@ function AddVideoForm({
     onAddVideos(playlistId, videos);
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: handleSubmit, className: "relative", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 relative", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("form", { onSubmit: handleSubmit, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 relative", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            type: "text",
+            value: url,
+            onChange: (e) => setUrl(e.target.value),
+            onPaste: handlePaste,
+            placeholder: "Paste YouTube URL, playlist, or channel...",
+            disabled: isLoading,
+            className: "w-full px-4 py-2 pr-10 bg-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          }
+        ),
+        isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute right-3 top-1/2 -translate-y-1/2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { className: "w-5 h-5 animate-spin text-gray-400", fill: "none", viewBox: "0 0 24 24", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "input",
+            "circle",
             {
-              type: "text",
-              value: url,
-              onChange: (e) => {
-                setUrl(e.target.value);
-                setError(null);
-              },
-              onPaste: handlePaste,
-              placeholder: "Paste YouTube URL, playlist, or channel...",
-              disabled: isLoading,
-              className: `w-full px-4 py-2 pr-10 bg-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 ${error ? "ring-2 ring-red-500" : ""}`
+              className: "opacity-25",
+              cx: "12",
+              cy: "12",
+              r: "10",
+              stroke: "currentColor",
+              strokeWidth: "4"
             }
           ),
-          isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute right-3 top-1/2 -translate-y-1/2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { className: "w-5 h-5 animate-spin text-gray-400", fill: "none", viewBox: "0 0 24 24", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "circle",
-              {
-                className: "opacity-25",
-                cx: "12",
-                cy: "12",
-                r: "10",
-                stroke: "currentColor",
-                strokeWidth: "4"
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "path",
-              {
-                className: "opacity-75",
-                fill: "currentColor",
-                d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              }
-            )
-          ] }) })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            type: "submit",
-            disabled: isLoading || !url.trim(),
-            className: "px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors",
-            children: "Add"
-          }
-        )
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "path",
+            {
+              className: "opacity-75",
+              fill: "currentColor",
+              d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            }
+          )
+        ] }) })
       ] }),
-      error && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-2 text-sm text-red-400", children: error }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-2 text-xs text-gray-500", children: "Supports videos, playlists, and channel URLs (@handle, /channel/, /c/)" })
-    ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "submit",
+          disabled: isLoading || !url.trim(),
+          className: "px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors",
+          children: "Add"
+        }
+      )
+    ] }) }),
     playlistImportData && /* @__PURE__ */ jsxRuntimeExports.jsx(
       PlaylistImportDialog,
       {
@@ -23851,6 +24015,13 @@ function useYouTubePlayer({
   const [isPlaying, setIsPlaying] = reactExports.useState(false);
   const [currentTime, setCurrentTime] = reactExports.useState(0);
   const [duration, setDuration] = reactExports.useState(0);
+  const [volume, setVolumeState] = reactExports.useState(() => {
+    const saved = localStorage.getItem("isotube-volume");
+    return saved !== null ? Number(saved) : 100;
+  });
+  const [isMuted, setIsMuted] = reactExports.useState(() => {
+    return localStorage.getItem("isotube-muted") === "true";
+  });
   const callbacksRef = reactExports.useRef({ onProgress, onEnded, onPause });
   callbacksRef.current = { onProgress, onEnded, onPause };
   const startTimeRef = reactExports.useRef(startTime);
@@ -23888,6 +24059,12 @@ function useYouTubePlayer({
           onReady: (event) => {
             if (!mounted) return;
             playerRef.current = event.target;
+            const savedVolume = localStorage.getItem("isotube-volume");
+            const savedMuted = localStorage.getItem("isotube-muted") === "true";
+            event.target.setVolume(savedVolume !== null ? Number(savedVolume) : 100);
+            if (savedMuted) {
+              event.target.mute();
+            }
             setIsReady(true);
             setDuration(event.target.getDuration());
           },
@@ -23975,6 +24152,28 @@ function useYouTubePlayer({
       play();
     }
   }, [isPlaying, play, pause]);
+  const setVolume = reactExports.useCallback((val) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(val)));
+    playerRef.current?.setVolume(clamped);
+    setVolumeState(clamped);
+    localStorage.setItem("isotube-volume", String(clamped));
+    if (clamped > 0 && isMuted) {
+      playerRef.current?.unMute();
+      setIsMuted(false);
+      localStorage.setItem("isotube-muted", "false");
+    }
+  }, [isMuted]);
+  const toggleMute = reactExports.useCallback(() => {
+    if (isMuted) {
+      playerRef.current?.unMute();
+      setIsMuted(false);
+      localStorage.setItem("isotube-muted", "false");
+    } else {
+      playerRef.current?.mute();
+      setIsMuted(true);
+      localStorage.setItem("isotube-muted", "true");
+    }
+  }, [isMuted]);
   return {
     containerRef,
     isReady,
@@ -23984,7 +24183,11 @@ function useYouTubePlayer({
     play,
     pause,
     seekTo,
-    togglePlay
+    togglePlay,
+    volume,
+    isMuted,
+    setVolume,
+    toggleMute
   };
 }
 function NoVideoIcon() {
@@ -24056,6 +24259,15 @@ function NextIcon() {
 function PlayPauseIcon() {
   return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "w-3 h-3 sm:w-4 sm:h-4", fill: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" }) });
 }
+function VolumeHighIcon() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "w-5 h-5 sm:w-6 sm:h-6", fill: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" }) });
+}
+function VolumeLowIcon() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "w-5 h-5 sm:w-6 sm:h-6", fill: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M7 9v6h4l5 5V4l-5 5H7zm9.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" }) });
+}
+function VolumeMuteIcon() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "w-5 h-5 sm:w-6 sm:h-6", fill: "currentColor", viewBox: "0 0 24 24", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" }) });
+}
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
@@ -24079,7 +24291,11 @@ const Player = reactExports.forwardRef(function Player2({
     currentTime,
     duration,
     togglePlay,
-    seekTo
+    seekTo,
+    volume,
+    isMuted,
+    setVolume,
+    toggleMute
   } = useYouTubePlayer({
     videoId: video?.id ?? null,
     startTime: video?.progress ?? 0,
@@ -24164,6 +24380,29 @@ const Player = reactExports.forwardRef(function Player2({
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-gray-400 w-8 sm:w-10 hidden sm:block", children: formatTime(duration) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "group relative flex items-center", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            onClick: toggleMute,
+            className: "p-1.5 sm:p-2 rounded hover:bg-gray-700 transition-colors",
+            title: isMuted ? "Unmute" : "Mute",
+            children: isMuted || volume === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(VolumeMuteIcon, {}) : volume < 50 ? /* @__PURE__ */ jsxRuntimeExports.jsx(VolumeLowIcon, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(VolumeHighIcon, {})
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-0 opacity-0 group-hover:w-20 group-hover:opacity-100 overflow-hidden transition-all duration-200", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            type: "range",
+            min: 0,
+            max: 100,
+            value: isMuted ? 0 : volume,
+            onChange: (e) => setVolume(Number(e.target.value)),
+            className: "w-20 h-1 accent-blue-500 cursor-pointer",
+            title: `Volume: ${isMuted ? 0 : volume}%`
+          }
+        ) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "button",
@@ -24407,25 +24646,48 @@ function PlaylistList() {
     ] })
   ] });
 }
-function RefreshIcon({ className = "w-5 h-5" }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "svg",
-    {
-      className,
-      fill: "none",
-      stroke: "currentColor",
-      viewBox: "0 0 24 24",
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "path",
-        {
-          strokeLinecap: "round",
-          strokeLinejoin: "round",
-          strokeWidth: 2,
-          d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-        }
-      )
-    }
-  );
+function SubscriptionMenuItems({
+  isRefreshing,
+  isFetchingAll,
+  onRefresh,
+  onFetchAll,
+  onDelete
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      DropdownMenuItem,
+      {
+        disabled: isRefreshing,
+        onClick: (e) => {
+          e.stopPropagation();
+          onRefresh();
+        },
+        children: isRefreshing ? "Refreshing..." : "Refresh"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      DropdownMenuItem,
+      {
+        disabled: isFetchingAll,
+        onClick: (e) => {
+          e.stopPropagation();
+          onFetchAll();
+        },
+        children: isFetchingAll ? "Fetching..." : "Add all videos"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      DropdownMenuItem,
+      {
+        variant: "destructive",
+        onClick: (e) => {
+          e.stopPropagation();
+          onDelete();
+        },
+        children: "Unsubscribe"
+      }
+    )
+  ] });
 }
 function SubscriptionItem({
   subscription,
@@ -24434,6 +24696,8 @@ function SubscriptionItem({
   isRefreshing,
   onSelect,
   onRefresh,
+  onFetchAll,
+  isFetchingAll,
   onDelete
 }) {
   const formatLastRefreshed = (timestamp) => {
@@ -24472,22 +24736,6 @@ function SubscriptionItem({
           ), children: formatLastRefreshed(subscription.lastRefreshed) })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-gray-400", children: videoCount }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            onClick: (e) => {
-              e.stopPropagation();
-              onRefresh();
-            },
-            disabled: isRefreshing,
-            className: cn(
-              "p-1 rounded transition-all",
-              isRefreshing ? "animate-spin text-blue-400" : "opacity-0 group-hover:opacity-100 hover:bg-gray-600"
-            ),
-            title: "Refresh videos",
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshIcon, { className: "w-4 h-4" })
-          }
-        ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(DropdownMenu, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
@@ -24498,14 +24746,13 @@ function SubscriptionItem({
             }
           ) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuContent, { align: "end", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            DropdownMenuItem,
+            SubscriptionMenuItems,
             {
-              variant: "destructive",
-              onClick: (e) => {
-                e.stopPropagation();
-                onDelete();
-              },
-              children: "Unsubscribe"
+              isRefreshing,
+              isFetchingAll,
+              onRefresh,
+              onFetchAll,
+              onDelete
             }
           ) })
         ] })
@@ -24524,6 +24771,7 @@ function SubscriptionList() {
   } = usePlaylistsContext();
   const [isExpanded, setIsExpanded] = reactExports.useState(false);
   const [refreshingIds, setRefreshingIds] = reactExports.useState(/* @__PURE__ */ new Set());
+  const [fetchingAllIds, setFetchingAllIds] = reactExports.useState(/* @__PURE__ */ new Set());
   const activeSubscription = subscriptions.find((s) => s.id === activeSubscriptionId);
   const activePlaylist = activeSubscription ? getSubscriptionPlaylist(activeSubscription.id) : null;
   const handleSelectSubscription = (subscriptionId) => {
@@ -24547,23 +24795,53 @@ function SubscriptionList() {
       });
     }
   };
+  const handleFetchAll = async (subscription) => {
+    if (fetchingAllIds.has(subscription.id)) return;
+    setFetchingAllIds((prev) => new Set(prev).add(subscription.id));
+    try {
+      const uploadsPlaylistId = subscription.channelId.replace(/^UC/, "UU");
+      const videos = await fetchAllChannelVideos(uploadsPlaylistId);
+      refreshSubscription(subscription.id, videos);
+    } catch (error) {
+      console.error("Failed to fetch all channel videos:", error);
+    } finally {
+      setFetchingAllIds((prev) => {
+        const next = new Set(prev);
+        next.delete(subscription.id);
+        return next;
+      });
+    }
+  };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "shrink-0 overflow-auto p-2", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "button",
-      {
-        onClick: () => setIsExpanded(!isExpanded),
-        className: "w-full flex items-center justify-between px-3 py-2 rounded hover:bg-gray-700 transition-colors",
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 min-w-0", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(ChannelIcon, { className: "w-4 h-4 flex-shrink-0 text-gray-400" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-medium truncate", children: activeSubscription?.name ?? "Select Channel" }),
-            activePlaylist && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-gray-400", children: [
-              "(",
-              activePlaylist.videos.length,
-              ")"
-            ] })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex items-center gap-2 min-w-0 px-3 py-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(ChannelIcon, { className: "w-4 h-4 flex-shrink-0 text-gray-400" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-medium truncate", children: activeSubscription?.name ?? "Select Channel" }),
+        activePlaylist && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-gray-400", children: [
+          "(",
+          activePlaylist.videos.length,
+          ")"
+        ] })
+      ] }),
+      activeSubscription && /* @__PURE__ */ jsxRuntimeExports.jsxs(DropdownMenu, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "p-1.5 rounded hover:bg-gray-600 transition-colors", children: /* @__PURE__ */ jsxRuntimeExports.jsx("svg", { className: "w-4 h-4 text-gray-400", fill: "currentColor", viewBox: "0 0 20 20", children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" }) }) }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(DropdownMenuContent, { align: "end", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          SubscriptionMenuItems,
+          {
+            isRefreshing: refreshingIds.has(activeSubscription.id),
+            isFetchingAll: fetchingAllIds.has(activeSubscription.id),
+            onRefresh: () => handleRefresh(activeSubscription),
+            onFetchAll: () => handleFetchAll(activeSubscription),
+            onDelete: () => deleteSubscription(activeSubscription.id)
+          }
+        ) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: () => setIsExpanded(!isExpanded),
+          className: "p-1.5 rounded hover:bg-gray-600 transition-colors",
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             "svg",
             {
               className: `w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`,
@@ -24573,9 +24851,9 @@ function SubscriptionList() {
               children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M19 9l-7 7-7-7" })
             }
           )
-        ]
-      }
-    ),
+        }
+      )
+    ] }),
     isExpanded && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 border-t border-gray-700 pt-2", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-between px-2 py-1 mb-2", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-gray-400 uppercase tracking-wide", children: "Channels" }) }),
       subscriptions.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-gray-500 text-sm px-2 py-4 text-center", children: [
@@ -24593,6 +24871,8 @@ function SubscriptionList() {
             isRefreshing: refreshingIds.has(subscription.id),
             onSelect: () => handleSelectSubscription(subscription.id),
             onRefresh: () => handleRefresh(subscription),
+            onFetchAll: () => handleFetchAll(subscription),
+            isFetchingAll: fetchingAllIds.has(subscription.id),
             onDelete: () => deleteSubscription(subscription.id)
           },
           subscription.id
@@ -24604,38 +24884,44 @@ function SubscriptionList() {
 function SidebarTabs({
   activeTab,
   onTabChange,
-  playlistCount,
-  subscriptionCount
+  watchLaterCount
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex border-b border-gray-700", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "button",
       {
-        onClick: () => onTabChange("playlists"),
+        onClick: () => onTabChange("watch-later"),
         className: cn(
-          "flex-1 px-4 py-2 text-sm font-medium transition-colors",
-          activeTab === "playlists" ? "border-b-2 border-blue-500 text-blue-400" : "text-gray-400 hover:text-white"
+          "flex-1 px-2 py-2 text-sm font-medium transition-colors",
+          activeTab === "watch-later" ? "border-b-2 border-blue-500 text-blue-400" : "text-gray-400 hover:text-white"
         ),
         children: [
-          "Playlists (",
-          playlistCount,
+          "Watch Later (",
+          watchLaterCount,
           ")"
         ]
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
+      {
+        onClick: () => onTabChange("playlists"),
+        className: cn(
+          "flex-1 px-2 py-2 text-sm font-medium transition-colors",
+          activeTab === "playlists" ? "border-b-2 border-blue-500 text-blue-400" : "text-gray-400 hover:text-white"
+        ),
+        children: "Playlists"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
       "button",
       {
         onClick: () => onTabChange("subscriptions"),
         className: cn(
-          "flex-1 px-4 py-2 text-sm font-medium transition-colors",
+          "flex-1 px-2 py-2 text-sm font-medium transition-colors",
           activeTab === "subscriptions" ? "border-b-2 border-blue-500 text-blue-400" : "text-gray-400 hover:text-white"
         ),
-        children: [
-          "Channels (",
-          subscriptionCount,
-          ")"
-        ]
+        children: "Channels"
       }
     )
   ] });
@@ -37164,7 +37450,7 @@ function formatUploadDate(dateStr) {
     return null;
   }
 }
-function VideoDetailSummary({ video }) {
+function VideoDetailSummary({ video, onUpdate, onDelete }) {
   const { description, isLoading } = useVideoDescription(video?.id ?? null);
   if (!video) {
     return null;
@@ -37174,12 +37460,20 @@ function VideoDetailSummary({ video }) {
   const hasNotes = video.notes && video.notes.trim().length > 0;
   const hasDescription = description.trim().length > 0;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-4 space-y-4 text-sm overflow-y-auto min-h-0", children: [
-    (uploadDate || hasRating) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-4 text-gray-400", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-4 text-gray-400", children: [
       uploadDate && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(CalendarIcon, { className: "w-4 h-4" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: uploadDate })
       ] }),
-      hasRating && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-1.5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ReadOnlyStars, { rating: video.rating }) })
+      hasRating && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-1.5", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ReadOnlyStars, { rating: video.rating }) }),
+      onUpdate && onDelete && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "ml-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        VideoActionsDropdown,
+        {
+          video,
+          onUpdate,
+          onDelete
+        }
+      ) })
     ] }),
     hasNotes && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-lg bg-gray-800/50 border border-gray-700 p-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-2", children: [
@@ -37246,8 +37540,10 @@ function App() {
   const {
     playlists,
     activePlaylist,
+    playingPlaylist,
     currentVideo,
     currentVideoId,
+    currentVideoPlaylistId,
     setVideoProgress,
     setVideoStatus,
     playNext,
@@ -37259,24 +37555,37 @@ function App() {
     addVideo,
     addVideos,
     createPlaylistWithVideos,
-    createSubscription
+    createSubscription,
+    watchLaterPlaylist,
+    updateVideo,
+    deleteVideo
   } = usePlaylistsContext();
   const [autoAdvance, setAutoAdvance] = reactExports.useState(true);
   const playerRef = reactExports.useRef(null);
-  const currentIndex = activePlaylist?.videos.findIndex((v) => v.id === currentVideoId) ?? -1;
-  const hasNext = currentIndex >= 0 && currentIndex < (activePlaylist?.videos.length ?? 0) - 1;
+  const currentIndex = playingPlaylist?.videos.findIndex((v) => v.id === currentVideoId) ?? -1;
+  const hasNext = currentIndex >= 0 && currentIndex < (playingPlaylist?.videos.length ?? 0) - 1;
   const hasPrevious = currentIndex > 0;
   const handleProgress = reactExports.useCallback((seconds) => {
-    if (activePlaylist && currentVideoId) {
-      setVideoProgress(activePlaylist.id, currentVideoId, seconds);
+    if (currentVideoPlaylistId && currentVideoId) {
+      setVideoProgress(currentVideoPlaylistId, currentVideoId, seconds);
     }
-  }, [activePlaylist, currentVideoId, setVideoProgress]);
+  }, [currentVideoPlaylistId, currentVideoId, setVideoProgress]);
   const handleEnded = reactExports.useCallback(() => {
-    if (activePlaylist && currentVideoId) {
-      setVideoStatus(activePlaylist.id, currentVideoId, "completed");
-      setVideoProgress(activePlaylist.id, currentVideoId, 0);
+    if (currentVideoPlaylistId && currentVideoId) {
+      setVideoStatus(currentVideoPlaylistId, currentVideoId, "completed");
+      setVideoProgress(currentVideoPlaylistId, currentVideoId, 0);
     }
-  }, [activePlaylist, currentVideoId, setVideoStatus, setVideoProgress]);
+  }, [currentVideoPlaylistId, currentVideoId, setVideoStatus, setVideoProgress]);
+  const handleDetailUpdate = reactExports.useCallback((updates) => {
+    if (currentVideoPlaylistId && currentVideoId) {
+      updateVideo(currentVideoPlaylistId, currentVideoId, updates);
+    }
+  }, [currentVideoPlaylistId, currentVideoId, updateVideo]);
+  const handleDetailDelete = reactExports.useCallback(() => {
+    if (currentVideoPlaylistId && currentVideoId) {
+      deleteVideo(currentVideoPlaylistId, currentVideoId);
+    }
+  }, [currentVideoPlaylistId, currentVideoId, deleteVideo]);
   useKeyboardShortcuts({
     onPlayPause: () => playerRef.current?.togglePlay(),
     onNext: hasNext ? playNext : void 0,
@@ -37291,15 +37600,9 @@ function App() {
           /* @__PURE__ */ jsxRuntimeExports.jsx(Logo, {}),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("h1", { className: "text-xl font-bold tracking-tight text-white", children: [
             "Iso-Tube",
-            /* @__PURE__ */ jsxRuntimeExports.jsx("small", { className: "text-xs font-normal text-purple-400 px-4", children: "Watch YouTube videos without the distraction" })
+            /* @__PURE__ */ jsxRuntimeExports.jsx("small", { className: "hidden sm:inline text-xs font-normal text-purple-400 px-4", children: "Watch YouTube videos without the distraction" })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "ml-auto flex items-center gap-1", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(HelpDialog, {}),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(HeaderMenu, {})
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(Sidebar, { className: "hidden lg:flex", children: [
-          activePlaylist && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-4 border-b border-gray-700", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          activePlaylist && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "hidden lg:block flex-1 max-w-xl mx-4", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
             AddVideoForm,
             {
               onAddVideo: (video) => addVideo(activePlaylist.id, video),
@@ -37310,16 +37613,24 @@ function App() {
               currentPlaylistId: activePlaylist.id
             }
           ) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "ml-auto flex items-center gap-1", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(HelpDialog, {}),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(HeaderMenu, {})
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(Sidebar, { className: "hidden lg:flex", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             SidebarTabs,
             {
               activeTab: sidebarView,
               onTabChange: setSidebarView,
+              watchLaterCount: watchLaterPlaylist?.videos.length ?? 0,
               playlistCount: userPlaylists.length,
               subscriptionCount: subscriptions.length
             }
           ),
-          sidebarView === "playlists" ? /* @__PURE__ */ jsxRuntimeExports.jsx(PlaylistList, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(SubscriptionList, {}),
+          sidebarView === "playlists" && /* @__PURE__ */ jsxRuntimeExports.jsx(PlaylistList, {}),
+          sidebarView === "subscriptions" && /* @__PURE__ */ jsxRuntimeExports.jsx(SubscriptionList, {}),
           /* @__PURE__ */ jsxRuntimeExports.jsx(VideoList, {})
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "lg:hidden row-start-3 bg-gray-800 overflow-y-auto", children: [
@@ -37339,11 +37650,13 @@ function App() {
             {
               activeTab: sidebarView,
               onTabChange: setSidebarView,
+              watchLaterCount: watchLaterPlaylist?.videos.length ?? 0,
               playlistCount: userPlaylists.length,
               subscriptionCount: subscriptions.length
             }
           ),
-          sidebarView === "playlists" ? /* @__PURE__ */ jsxRuntimeExports.jsx(PlaylistList, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(SubscriptionList, {}),
+          sidebarView === "playlists" && /* @__PURE__ */ jsxRuntimeExports.jsx(PlaylistList, {}),
+          sidebarView === "subscriptions" && /* @__PURE__ */ jsxRuntimeExports.jsx(SubscriptionList, {}),
           /* @__PURE__ */ jsxRuntimeExports.jsx(VideoList, {})
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "row-start-2 lg:col-start-2 flex flex-col min-w-0 min-h-0", children: [
@@ -37365,7 +37678,9 @@ function App() {
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             VideoDetailSummary,
             {
-              video: currentVideo
+              video: currentVideo,
+              onUpdate: handleDetailUpdate,
+              onDelete: handleDetailDelete
             }
           )
         ] })
@@ -37374,5 +37689,5 @@ function App() {
   );
 }
 clientExports.createRoot(document.getElementById("root")).render(
-  /* @__PURE__ */ jsxRuntimeExports.jsx(reactExports.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(PlaylistsProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) }) })
+  /* @__PURE__ */ jsxRuntimeExports.jsx(reactExports.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(PlaylistsProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(ToastProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) }) }) })
 );
