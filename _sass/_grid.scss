@@ -1,5 +1,9 @@
 .grid-container {
-    position: relative;
+    // Absolute so it takes no flow space — the logo reflection's outer
+    // must start at the same flow position as the original's.
+    position: absolute;
+    top: 0;
+    left: 0;
     margin-left: -75%;
     width: 250%;
     height: 100%;

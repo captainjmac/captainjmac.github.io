@@ -28,6 +28,23 @@
     height: 100vh;
 }
 
+.starfield-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    // Above the grid (z 1, in .background-container), below the logo (z 2).
+    z-index: 1;
+    pointer-events: none;
+
+    canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+}
+
 body {
     font-size: 1.2rem;
 
@@ -43,8 +60,10 @@ body {
         display: block;
         position: relative;
         width: 85%;
-        max-width: 50vw;
-        top: 71%;
+        // Bottom edge is anchored at 77vh, so the (square) image must also be
+        // capped against viewport height or it overflows the top on wide windows.
+        max-width: min(62.5vw, 75vh);
+        top: 77%;
         left: 50%;
         transform: translateX(-50%);
         transition: all 1s;
@@ -63,7 +82,11 @@ body {
                 z-index: 0;
                 opacity: 0.1;
 
-                transform: translateY(-163%) scaleY(-1);
+                // Original is shifted up by its own height, so the flipped
+                // copy mirrors it from the shared baseline. The PNG has ~6.9%
+                // transparent padding below the artwork, which doubles when
+                // mirrored — the translate pulls the art edges back together.
+                transform: translateY(-13.7%) scaleY(-1);
             }
         }
     }
@@ -96,10 +119,6 @@ body {
             top: 62%;
             left: 17%;
             width: 30%;
-
-            .jmac-logo.reflection {
-                transform: translateY(-255%) scaleY(-1);
-            }
         }
         .side-pane {
             width: 30vw;

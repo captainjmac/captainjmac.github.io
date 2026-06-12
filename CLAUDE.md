@@ -91,6 +91,7 @@ The site features a distinctive retro aesthetic:
 - Gradient backgrounds with animated grid overlay (`.grid-container`)
 - Neon text effects (`.neon-text-cyan`, `.neon-text-pink`)
 - CRT scanline overlay (`.scanlines`)
+- Twinkling starfield around the logo, rendered with PixiJS (`assets/js/starfield.js`; PixiJS v8 loaded from CDN in `head-retro.html`, canvas layered via `.starfield-container`)
 - Custom logo with reflection effect (`/assets/img/jmac-kool-logo-1-transparent-sml.png`)
 - Landing page includes tagline: "Full-stack web developer • Fun-stacked game developer"
 
