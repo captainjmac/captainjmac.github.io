@@ -27,6 +27,44 @@
     }
 }
 
+// Cursor spotlight that reveals a white copy of the grid (driven by
+// assets/js/grid-glow.js). The spotlight is a small box that follows the
+// cursor via transform, with a STATIC radial mask; the full-size grid copy
+// inside is counter-translated so it stays pinned to screen space. Keeping
+// the masked region this small is deliberate — masking a moving gradient
+// over the full 250%-wide perspective grid forces the browser to
+// re-rasterize the whole layer every frame, which flickers on large
+// windows. The mask also sits outside the grid's perspective transform, so
+// the spotlight stays a screen-space circle. Both grid copies share the
+// same animation started on the same paint, so their lines stay aligned.
+.grid-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 480px;  // grid-glow.js HALF constant = half of this
+    height: 480px;
+    pointer-events: none;
+    transform: translate(-9999px, -9999px); // parked offscreen until pointermove
+    will-change: transform;
+    -webkit-mask-image: radial-gradient(circle closest-side, black 0%, transparent 100%);
+    mask-image: radial-gradient(circle closest-side, black 0%, transparent 100%);
+
+    .grid-glow-inner {
+        position: absolute;
+        top: 0;
+        left: 0;
+        // Restores the full-size positioning context the grid copy's
+        // percentage geometry expects (matches .background-container).
+        width: 100vw;
+        height: 100vh;
+        will-change: transform;
+    }
+
+    .grid-container {
+        --grid-color: #fff;
+    }
+}
+
 .grid-container::after {
     content: '';
     position: absolute;

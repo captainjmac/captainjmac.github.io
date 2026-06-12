@@ -107,12 +107,12 @@
         const c = centerPoint();
         const dir = pos.x >= c.x ? 1 : -1;
         const vertFalloff = Math.max(0.1, 1 - Math.abs(pos.y - c.y) / (app.screen.height / 2));
-        star.vx = dir * (20 + Math.random() * 50) * vertFalloff;
-        star.duration = 1.5 + Math.random() * 3.5;
+        star.vx = dir * (10 + Math.random() * 25) * vertFalloff;
+        star.duration = 4 + Math.random() * 9;
         star.maxAlpha = 0.6 + Math.random() * 0.4;
         star.baseScale = 0.14 + Math.random() * 0.3;
         if (Math.random() < 0.06) star.baseScale *= 2; // occasional hero sparkle
-        star.flickerSpeed = 6 + Math.random() * 10;
+        star.flickerSpeed = 2 + Math.random() * 3.5;
         star.phase = Math.random() * Math.PI * 2;
     }
 

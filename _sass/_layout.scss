@@ -95,7 +95,7 @@ body {
         position: absolute;
         right: 0;
         bottom: 0;
-        z-index: 1;
+        z-index: 3;
         max-height: 75%;
         transform: translateY(9%); // Only here because GIMP is shit and not exporting correct image bounds
         transition: all 1s;
