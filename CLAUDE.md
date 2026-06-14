@@ -16,46 +16,20 @@ bundle exec jekyll serve  # Start local development server
 
 **Important**: Changes to `_config.yml` require a server restart.
 
-### Isotube Subdirectory
+### Isotube
 
-The `/isotube/` directory contains a separate React-based YouTube playlist manager application. See `isotube/CLAUDE.md` for details.
-
-```bash
-cd isotube
-npm run dev              # Start Vite dev server
-npm run build:deploy     # Build and copy assets for GitHub Pages deployment
-```
+Isotube (the React YouTube playlist manager) now lives in its **own repository**
+and deploys independently to `https://isotube.jmac.co`. It is no longer part of
+this repo. The `isotube/` directory here contains only a static redirect page
+(`isotube/index.html`) that forwards the old `jmac.co/isotube/` URL to the new
+subdomain.
 
 ## Deployment Workflow
 
-### Building Isotube for Production
-
-When making changes to the isotube React app:
-
-1. Navigate to isotube directory: `cd isotube`
-2. Build and deploy: `npm run build:deploy`
-   - Runs TypeScript type check
-   - Builds optimized React bundle with Vite
-   - Copies `dist/index.html` → `isotube/index.html`
-   - Copies `dist/assets/` → `isotube/assets/`
-3. Commit the built files: `git add isotube/index.html isotube/assets/`
-4. Push to main branch
-
-### Full Site Deployment
-
-1. Build isotube if it has changes (see above)
-2. Test Jekyll locally: `bundle exec jekyll serve`
-   - Jekyll site: http://localhost:4000
-   - Isotube: http://localhost:4000/isotube/
-3. Commit all changes
-4. Push to main branch
-5. GitHub Pages automatically builds and deploys
-
-### Important Notes
-
-- **Built files are committed**: `isotube/index.html` and `isotube/assets/` must be committed to git
-- **Source files are not built by GitHub**: GitHub Pages only serves the pre-built React files
-- **Jekyll excludes source files**: The `_config.yml` excludes isotube's node_modules and src files from processing
+1. Test Jekyll locally: `bundle exec jekyll serve` (http://localhost:4000)
+2. Commit all changes
+3. Push to main branch
+4. GitHub Pages automatically builds and deploys
 
 ## Architecture
 
