@@ -29,8 +29,9 @@ function init() {
     window.__retroScene = renderer; // dev handle for inspecting the effect layer
 
     // Orthographic camera in CSS pixels: x right, and objects placed at
-    // y = -cssY so the origin is the top-left of the viewport.
-    const camera = new THREE.OrthographicCamera(0, 1, 0, -1, -10, 10);
+    // y = -cssY so the origin is the top-left of the viewport. The deep
+    // depth range is for knocked-off logo letters, which tumble in 3D.
+    const camera = new THREE.OrthographicCamera(0, 1, 0, -1, -2000, 2000);
     const scene = new THREE.Scene();
     const size = { w: 1, h: 1 };
 
@@ -237,6 +238,15 @@ function init() {
     glow.renderOrder = 4;
     logo.visible = reflection.visible = glow.visible = false;
     scene.add(logo, reflection, glow);
+    // The logo's letters and swoosh alone, drawn back over knocked-off
+    // letters so they fly off behind the logo (see render). On its own
+    // layer, so the main pass skips it.
+    const FRONT_LAYER = 1;
+    const logoFrontMaterial = makeLogoPlaneMaterial(1);
+    const logoFront = new THREE.Mesh(logoGeometry, logoFrontMaterial);
+    logoFront.layers.set(FRONT_LAYER);
+    logoFront.renderOrder = 3;
+    scene.add(logoFront);
 
     const starTexture = makeStarTexture();
     let logo3d = null;
@@ -246,7 +256,7 @@ function init() {
     const LOGO_FADE_SECONDS = 0.5;
     let logoFade = 0;
     function applyLogoFade() {
-        logoMaterial.uniforms.uOpacity.value = logoFade;
+        logoMaterial.uniforms.uOpacity.value = logoFrontMaterial.uniforms.uOpacity.value = logoFade;
         reflectionMaterial.uniforms.uOpacity.value = 0.1 * logoFade;
         glowMaterial.uniforms.uFade.value = logoFade;
     }
@@ -274,14 +284,18 @@ function init() {
     if (logoEl) {
         // Carry this script's ?v= cache-buster over to the logo module.
         import(new URL('./retro-logo.js' + new URL(import.meta.url).search, import.meta.url).href)
-            .then(({ createLogo }) => {
+            .then(({ createLogo, createBloom, GLOW_LAYER }) => {
                 // The intro plays on the landing page only, so it doesn't
                 // replay on every page; reduced motion skips it.
                 const intro = document.body.classList.contains('landing') && !reducedMotion;
                 logo3d = createLogo(renderer, { starTexture, intro });
                 knockable = intro; // letters can be knocked off on the landing page
+                logoFrontMaterial.uniforms.map.value = logo3d.frontTexture;
+                debrisBloom = createBloom(renderer);
+                debrisGlowLayer = GLOW_LAYER;
+                sizeDebrisBloom();
                 logoPadding = logo3d.padding;
-                window.__retroLogo = { logo3d, glow }; // dev handle for tuning the logo
+                window.__retroLogo = { logo3d, glow, debris }; // dev handle for tuning the logo
                 glowMaterial.uniforms.tTight.value = logo3d.glowTight;
                 glowMaterial.uniforms.tWide.value = logo3d.glowWide;
                 glow.visible = true;
@@ -296,53 +310,82 @@ function init() {
     }
 
     // ---- Knocked-off letters ---------------------------------------------
-    // Clicking a letter on the landing page knocks it off the logo: it
-    // tumbles away into the distance, lands flat on the grid, bounces, rides
-    // the grid for a moment and fades, while the logo sends a new letter in
-    // over the top of the disc.
+    // Clicking a letter on the landing page knocks it off the logo: it pops
+    // up and tumbles away into the distance, lands flat on the grid,
+    // bounces, rides the grid toward the viewer for a moment and fades,
+    // while the logo sends a new letter in over the top of the disc.
     //
-    // The letter is drawn in its own 3D scene, not the logo's render, so it
-    // can leave the logo box. That scene's camera reproduces the grid's CSS
-    // perspective exactly: world units are CSS px (y up, as y = -cssY), the
-    // screen is the plane z = 0 and the eye sits GRID_PERSPECTIVE px in
-    // front of the grid's transform origin. The floor is the grid's plane,
-    // tilted GRID_TILT from the screen, so a letter lying in it is
-    // foreshortened just like the grid lines around it. Its path is worked
-    // out in the floor's frame: lx across, ly along the floor (the grid
-    // shader's element-local px relative to the transform origin, negative
-    // into the distance) and h, its height off the floor.
+    // The letter is drawn here, not in the logo's own render, so it can
+    // leave the logo box. Its path is worked out in the grid's own
+    // coordinates (lx across, ly along the floor: the grid shader's
+    // element-local px relative to the transform origin, negative into the
+    // distance) plus a height above the floor, then projected with the same
+    // CSS perspective as the grid. The letter itself is drawn without that
+    // perspective (the eye is only 85px from the screen, which would smear
+    // a solid letter across the view); instead it tips back by the floor's
+    // foreshortening where it lies, so it sits flat like the grid around it.
     let knockable = false;
     const debris = [];
+    // Knocked-off letters live in their own scene, bloomed like the logo.
     const debrisScene = new THREE.Scene();
-    const gridCamera = new THREE.PerspectiveCamera();
+    let debrisBloom = null;
+    let debrisGlowLayer = 1;
+    const debrisGlowMaterial = new THREE.ShaderMaterial({
+        uniforms: { tTight: { value: null }, tWide: { value: null } },
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        vertexShader: /* glsl */ `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = vec4(position.xy, 0.0, 1.0);
+            }
+        `,
+        fragmentShader: /* glsl */ `
+            uniform sampler2D tTight, tWide;
+            varying vec2 vUv;
+            void main() {
+                vec3 glow = (texture2D(tWide, vUv).rgb + texture2D(tTight, vUv).rgb) * 0.3;
+                gl_FragColor = linearToOutputTexel(vec4(glow, 1.0));
+            }
+        `,
+    });
+    const debrisGlowScene = new THREE.Scene();
+    const debrisGlowQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), debrisGlowMaterial);
+    debrisGlowQuad.frustumCulled = false;
+    debrisGlowScene.add(debrisGlowQuad);
+    const bufferSize = new THREE.Vector2();
+    const glowSize = new THREE.Vector2();
+    function sizeDebrisBloom() {
+        if (!debrisBloom) return;
+        renderer.getDrawingBufferSize(bufferSize);
+        debrisBloom.setSize(bufferSize.x, bufferSize.y);
+        glowSize.set(debrisBloom.target.width, debrisBloom.target.height);
+        debrisGlowMaterial.uniforms.tTight.value = debrisBloom.tight;
+        debrisGlowMaterial.uniforms.tWide.value = debrisBloom.wide;
+    }
     const KNOCK_RIDE = 1.3;  // s riding the grid before fading
     const KNOCK_FADE = 0.8;
     const gridSin = Math.sin(GRID_TILT);
     const gridCos = Math.cos(GRID_TILT);
-    const floorNormal = new THREE.Vector3(0, gridSin, gridCos);
     const gridOriginY = () => 0.87 * size.h;
+    const gridScale = (ly) => GRID_PERSPECTIVE / (GRID_PERSPECTIVE - ly * gridSin);
+    const screenYToGrid = (y) => {
+        const sy = y - gridOriginY();
+        return (sy * GRID_PERSPECTIVE) / (GRID_PERSPECTIVE * gridCos + sy * gridSin);
+    };
+    // How far back to tip a letter so it lies flat at depth ly. The floor is
+    // squashed vertically by cos(tilt) * k relative to its width there, but
+    // its cells are 125px wide by 100px deep and the eye reads them as
+    // squares, so the letter is squashed as much as the cells look.
+    const GRID_CELL_ASPECT = 100 / 125;
+    const lieFlat = (ly) => -Math.acos(Math.min(1, GRID_CELL_ASPECT * gridCos * gridScale(ly)));
     const smooth = (a, b, x) => {
         const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
         return t * t * (3 - 2 * t);
     };
-
-    // Off-axis frustum through the viewport, as seen from the CSS eye.
-    function updateGridCamera() {
-        const near = 1;
-        const f = near / GRID_PERSPECTIVE;
-        gridCamera.position.set(size.w / 2, -gridOriginY(), GRID_PERSPECTIVE);
-        gridCamera.updateMatrixWorld();
-        gridCamera.projectionMatrix.makePerspective(
-            -size.w / 2 * f, size.w / 2 * f, gridOriginY() * f, -(size.h - gridOriginY()) * f, near, 10000,
-        );
-        gridCamera.projectionMatrixInverse.copy(gridCamera.projectionMatrix).invert();
-    }
-
-    // World position of a point h px above the floor at (lx, ly).
-    function floorPoint(lx, ly, h, target) {
-        return target.set(size.w / 2 + lx, -(gridOriginY() + ly * gridCos), ly * gridSin)
-            .addScaledVector(floorNormal, h);
-    }
 
     // Soft glow the letter casts on the grid as it comes down.
     function makeSpotTexture() {
@@ -361,26 +404,27 @@ function init() {
         return texture;
     }
     let spotTexture = null;
-    const spotGeometry = new THREE.PlaneGeometry(1, 1);
 
-    function launchDebris({ debris: piece, x, y, scale, rotation }, clickX) {
+    function launchDebris({ debris: piece, x, y, scale, rotation, discBottom }, clickX) {
         const cx = logoRect.left + logoRect.width / 2 + (x * logoRect.width) / 2;
         const cy = logoRect.top + logoRect.height / 2 + (y * logoRect.height) / 2;
-        // The logo sits in the screen plane, where the grid's scale is 1, so
-        // the letter keeps its on-screen size there. In the floor's frame it
-        // starts a little way above the floor.
-        const ly0 = (cy - gridOriginY()) * gridCos;
-        const h0 = (gridOriginY() - cy) * gridSin;
-        // It lands well into the distance, between where it started and the
-        // grid's far edge; gravity is picked so the flight takes `flight`.
+        const pxPerUnit = scale * logoRect.height;
+        // It lands out in the distance, just past the bottom of the disc
+        // (any further and it would land on the logo), travelling away
+        // from the viewer as it flies. Gravity is picked so the flight
+        // takes `flight`.
         const flight = 0.95 + Math.random() * 0.25;
-        const farEdge = -gridOriginY();
-        const lyLand = ly0 + (farEdge - ly0) * (0.35 + Math.random() * 0.2);
-        const vh0 = 20 + Math.random() * 30;
+        const discBottomY = logoRect.top + logoRect.height / 2 + (discBottom * logoRect.height) / 2;
+        const lyLand = screenYToGrid(Math.min(size.h * 0.9, discBottomY + size.h * (0.03 + Math.random() * 0.06)));
+        const vly = -(200 + Math.random() * 80);
+        const ly0 = Math.min(lyLand - vly * flight, screenYToGrid(size.h));
+        const k0 = gridScale(ly0);
+        const h0 = Math.max(0, (gridOriginY() + ly0 * gridCos * k0 - cy) / k0);
+        const vh0 = 200 + Math.random() * 100;
         // Away from where it was hit.
         const dir = cx >= clickX ? 1 : -1;
         if (!spotTexture) spotTexture = makeSpotTexture();
-        const spot = new THREE.Mesh(spotGeometry, new THREE.MeshBasicMaterial({
+        const spot = new THREE.Sprite(new THREE.SpriteMaterial({
             map: spotTexture,
             color: Math.random() < 0.5 ? 0xff3fd8 : 0x4ff4ff,
             blending: THREE.AdditiveBlending,
@@ -389,72 +433,79 @@ function init() {
             depthWrite: false,
             opacity: 0,
         }));
-        spot.rotation.x = -GRID_TILT; // lies in the floor
-        spot.renderOrder = 4;
-        const size_ = scale * logoRect.height; // letter units -> px
-        piece.group.scale.setScalar(size_);
-        piece.setScale(size_, renderer.getDrawingBufferSize(new THREE.Vector2()));
+        spot.renderOrder = -1; // under the letter
         debrisScene.add(piece.group, spot);
         debris.push({
-            piece, spot, flight, size: size_,
-            lx: cx - size.w / 2,
-            ly: ly0,
-            ly0,
-            h: h0,
-            h0,
+            piece, spot, flight, ly0, h0,
             vly: (lyLand - ly0) / flight,
-            vlx: dir * (40 + Math.random() * 80),
+            lx: (cx - size.w / 2) / k0,
+            ly: ly0,
+            h: h0,
+            vlx: dir * (60 + Math.random() * 90),
             vh: vh0,
             gravity: (2 * (h0 + vh0 * flight)) / (flight * flight),
+            size: pxPerUnit / k0,
+            // It shrinks as it falls, beyond the grid's own perspective, so
+            // the grid feels further below.
+            shrink: 0.5 + Math.random() * 0.1,
             age: 0,
             from: rotation,
-            // Spins flat like a frisbee as it settles into the floor
-            // (tilted back by GRID_TILT). With the eye this close to the
-            // screen, a flip would swing the letter up to the camera.
-            to: {
-                x: -GRID_TILT,
-                y: 0,
-                z: -dir * (Math.PI * 2 + 0.15 + Math.random() * 0.4),
-            },
+            // Knocked into a backflip: one whole turn backward, landing
+            // flat, with a slight turn away from the hit.
+            toZ: rotation.z - dir * (0.1 + Math.random() * 0.2),
+            flip: 0,
+            flat: 0,
         });
+        piece.group.matrixAutoUpdate = false; // composed with a shear, below
     }
 
-    const debrisPoint = new THREE.Vector3();
+    const gridTan = Math.tan(GRID_TILT);
+    const debrisOrigin = new THREE.Vector3();
+    const debrisQuat = new THREE.Quaternion();
+    const debrisScale = new THREE.Vector3();
+    const debrisShear = new THREE.Matrix4();
+    const debrisTaper = new THREE.Matrix4();
+    const debrisMove = new THREE.Matrix4();
     function updateDebris(dt) {
         for (let i = debris.length - 1; i >= 0; i--) {
             const d = debris[i];
             d.age += dt;
             const { group } = d.piece;
             if (d.age < d.flight) {
-                // Ballistic, spinning steadily to land flat.
+                // Ballistic, flipping fastest as it's hit. The shear onto
+                // the grid comes in as it lands.
                 const f = d.age / d.flight;
                 d.lx += d.vlx * dt;
                 d.ly = d.ly0 + d.vly * d.age;
                 d.h = d.h0 + d.vh * d.age - 0.5 * d.gravity * d.age * d.age;
-                group.rotation.set(
-                    d.from.x + (d.to.x - d.from.x) * f,
-                    d.from.y + (d.to.y - d.from.y) * f,
-                    d.from.z + (d.to.z - d.from.z) * f,
-                );
+                d.flip = 1 - (1 - f) ** 2;
+                d.flat = smooth(0.75, 1, f);
             } else {
                 if (!d.landed) {
                     // Bounce off the floor, then move with the grid.
                     d.landed = true;
-                    d.vh = -(d.vh - d.gravity * d.flight) * 0.35;
+                    d.vh = -(d.vh - d.gravity * d.flight) * 0.3;
                     d.h = 0;
                     d.vlx *= 0.5;
-                    group.rotation.set(d.to.x, d.to.y, d.to.z);
                 }
                 d.vh -= d.gravity * dt;
                 d.h += d.vh * dt;
                 if (d.h <= 0) {
                     d.h = 0;
-                    d.vh = d.vh < -25 ? -d.vh * 0.35 : 0;
+                    d.vh = d.vh < -60 ? -d.vh * 0.3 : 0;
                 }
                 d.ly += GRID_SPEED * dt;
                 d.vlx *= Math.exp(-4 * dt);
                 d.lx += d.vlx * dt;
+                d.flip = d.flat = 1;
             }
+            // A full turn back ends where it lies flat, which it keeps as
+            // the grid carries it nearer.
+            group.rotation.set(
+                d.from.x + (lieFlat(d.ly) - Math.PI * 2 * (d.landed ? 0 : 1) - d.from.x) * d.flip,
+                d.from.y * (1 - d.flip),
+                d.from.z + (d.toZ - d.from.z) * d.flip,
+            );
             const fade = 1 - smooth(KNOCK_RIDE, KNOCK_RIDE + KNOCK_FADE, d.age - d.flight);
             if (fade <= 0) {
                 debrisScene.remove(group, d.spot);
@@ -463,14 +514,33 @@ function init() {
                 debris.splice(i, 1);
                 continue;
             }
-            // Its lowest point rests on the floor once it lies flat, so it
-            // floats half its thickness up.
-            floorPoint(d.lx, d.ly, d.h + 0.1 * d.size, group.position);
+
+            const k = gridScale(d.ly);
+            const floorX = size.w / 2 + d.lx * k;
+            const floorY = gridOriginY() + d.ly * gridCos * k;
+            const shrink = d.landed ? d.shrink : 1 + (d.shrink - 1) * smooth(0, 1, d.age / d.flight);
+            const px = d.size * k * shrink;
+            // Lying in the floor, it also takes on the grid's perspective
+            // about its centre. Its sides follow the grid's lines, which
+            // converge on the centre: a shear along x, by how far off centre
+            // it is. And its far end shrinks as the grid does (a projective
+            // w term, divided out by the GPU): the grid's scale falls off by
+            // tan(tilt) / (perspective * k) per px up the screen.
+            const shear = -(d.lx * gridTan / GRID_PERSPECTIVE) * d.flat;
+            const taper = (gridTan / (GRID_PERSPECTIVE * k)) * d.flat;
+            debrisScale.setScalar(px);
+            debrisQuat.setFromEuler(group.rotation);
+            group.matrix.compose(debrisOrigin, debrisQuat, debrisScale)
+                .premultiply(debrisShear.set(1, shear, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1))
+                .premultiply(debrisTaper.set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, taper, 0, 1))
+                .premultiply(debrisMove.makeTranslation(floorX, -(floorY - d.h * k), 0));
+            group.matrixWorldNeedsUpdate = true;
+            d.piece.setScale(px, bufferSize, glowSize, renderer.getPixelRatio());
             d.piece.setFade(fade);
             // The glow on the floor grows as the letter comes down onto it.
-            const near = 1 - Math.min(1, d.h / (d.size * 0.6));
-            floorPoint(d.lx, d.ly, 0.5, d.spot.position);
-            d.spot.scale.set(d.size * 1.4, d.size * 1.2, 1);
+            const near = 1 - Math.min(1, (d.h * k) / (px * 1.5));
+            d.spot.position.set(floorX, -floorY, 0);
+            d.spot.scale.set(px * 1.4, px * 1.2 * gridCos * k, 1);
             d.spot.material.opacity = 0.6 * near * near * fade;
         }
     }
@@ -478,11 +548,13 @@ function init() {
     if (logoEl) {
         logoEl.addEventListener('click', (e) => {
             if (!knockable || !logo3d || !logoRect) return;
+            // The logo links to this page; following it would only restart
+            // the intro.
+            e.preventDefault();
             const x = (e.clientX - (logoRect.left + logoRect.width / 2)) / (logoRect.width / 2);
             const y = (e.clientY - (logoRect.top + logoRect.height / 2)) / (logoRect.height / 2);
             const index = logo3d.hitTest(x, y);
-            if (index < 0) return; // off the letters, the logo is still a link
-            e.preventDefault();
+            if (index < 0) return;
             const knocked = logo3d.knock(index);
             if (knocked) launchDebris(knocked, e.clientX);
         });
@@ -503,7 +575,7 @@ function init() {
         }
         logo3d.update(time, pointer);
         glowMaterial.uniforms.uTime.value = time;
-        logo3d.render();
+        logo3d.render({ front: debris.length > 0 });
     }
 
     let logoRect = null;
@@ -520,6 +592,8 @@ function init() {
         reflection.scale.set(r.width * logoPadding, -r.height * logoPadding, 1);
         glow.position.copy(logo.position);
         glow.scale.copy(logo.scale);
+        logoFront.position.copy(logo.position);
+        logoFront.scale.copy(logo.scale);
     }
 
     // ---- Stars -----------------------------------------------------------
@@ -661,8 +735,7 @@ function init() {
         camera.updateProjectionMatrix();
         gridUniforms.uSize.value.set(w, h);
         gridUniforms.uPixelRatio.value = renderer.getPixelRatio();
-        updateGridCamera();
-        for (const d of debris) d.piece.setScale(d.size, renderer.getDrawingBufferSize(new THREE.Vector2()));
+        sizeDebrisBloom();
         updateLogo();
         requestRender();
     }
@@ -687,12 +760,26 @@ function init() {
     let frame = 0;
 
     function render() {
+        const knocking = debris.length > 0 && debrisBloom !== null;
+        // While letters are knocked off, the logo's bloom moves to the
+        // front pass, so the redrawn letters don't cover it.
+        glow.layers.set(knocking ? FRONT_LAYER : 0);
         renderer.render(scene, camera);
-        if (debris.length) {
-            // Knocked-off letters, over everything else on the canvas.
+        if (knocking) {
+            // Knocked-off letters go over the logo's disc but under its
+            // letters and swoosh: bloomed as the logo is, then the logo's
+            // front layer and bloom drawn back over them.
             renderer.autoClear = false;
+            camera.layers.set(debrisGlowLayer);
+            debrisBloom.render(debrisScene, camera);
+            renderer.setRenderTarget(null);
+            camera.layers.set(0);
             renderer.clearDepth();
-            renderer.render(debrisScene, gridCamera);
+            renderer.render(debrisScene, camera);
+            renderer.render(debrisGlowScene, camera);
+            camera.layers.set(FRONT_LAYER);
+            renderer.render(scene, camera);
+            camera.layers.set(0);
             renderer.autoClear = true;
         }
         // Hide the HTML logo only once a frame with the WebGL logo is drawn.

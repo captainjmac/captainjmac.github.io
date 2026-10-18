@@ -59,8 +59,11 @@ const SPARK_GRAVITY = 7;     // world units / s²
 const easeOutCubic = (t) => 1 - (1 - t) ** 3;
 const easeInOutSine = (t) => 0.5 - 0.5 * Math.cos(Math.PI * t);
 
-// Layer 0 is the visible logo; layer 1 is what feeds the glow.
-const GLOW_LAYER = 1;
+// Layer 0 is the visible logo; layer 1 is what feeds the glow. Layer 2 is
+// the letters and swoosh alone, drawn over knocked-off letters so they fly
+// off behind the logo (see createLogo's render).
+export const GLOW_LAYER = 1;
+const FRONT_LAYER = 2;
 
 const color = (hex) => new THREE.Color(hex);
 // Raw sRGB values for shaders that blend gradients perceptually and convert
@@ -648,6 +651,44 @@ function makeBlurPass() {
     return { material, scene, camera };
 }
 
+// Bloom: a scene's glow layer rendered at half size (`tight`), then blurred
+// at quarter size (`wide`). The caller sets the camera's layers and the
+// clear colour.
+export function createBloom(renderer) {
+    // sRGB storage keeps precision in dark shades (see createLogo).
+    const targetOptions = { colorSpace: THREE.SRGBColorSpace };
+    const tight = new THREE.WebGLRenderTarget(1, 1, targetOptions);
+    const blurA = new THREE.WebGLRenderTarget(1, 1, targetOptions);
+    const blurB = new THREE.WebGLRenderTarget(1, 1, targetOptions);
+    const blur = makeBlurPass();
+    function blurPass(input, output, dx, dy) {
+        blur.material.uniforms.tInput.value = input.texture;
+        blur.material.uniforms.uStep.value.set(dx / input.width, dy / input.height);
+        renderer.setRenderTarget(output);
+        renderer.render(blur.scene, blur.camera);
+    }
+    return {
+        tight: tight.texture,
+        wide: blurB.texture,
+        target: tight,
+        // Full-size width and height, in device px.
+        setSize(w, h) {
+            tight.setSize(Math.ceil(w / 2), Math.ceil(h / 2));
+            blurA.setSize(Math.ceil(w / 4), Math.ceil(h / 4));
+            blurB.setSize(Math.ceil(w / 4), Math.ceil(h / 4));
+        },
+        render(scene, camera) {
+            renderer.setRenderTarget(tight);
+            renderer.clear();
+            renderer.render(scene, camera);
+            blurPass(tight, blurA, 1, 0);
+            blurPass(blurA, blurB, 0, 1);
+            blurPass(blurB, blurA, 1.5, 0);
+            blurPass(blurA, blurB, 0, 1.5);
+        },
+    };
+}
+
 // ---- Beam-in light and sparks -----------------------------------------------------
 // The logo target holds premultiplied colour, so light is added in
 // premultiplied form: colour adds up, alpha builds like normal "over".
@@ -883,6 +924,12 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
     const discOccluder = new THREE.Mesh(disc.geometry, new THREE.MeshBasicMaterial({ color: 0x000000 }));
     discOccluder.layers.set(GLOW_LAYER);
     disc.add(discOccluder);
+    // Depth-only stand-in on the front layer, so letters behind the disc
+    // (a replacement on its way in) stay hidden there too.
+    const discMask = new THREE.Mesh(disc.geometry, new THREE.MeshBasicMaterial({ colorWrite: false }));
+    discMask.layers.set(FRONT_LAYER);
+    discMask.renderOrder = -1;
+    disc.add(discMask);
 
     const cyan = color('#4ff4ff');
     const magenta = color('#ff3fd8');
@@ -983,6 +1030,7 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         textGroup.add(pivot);
 
         const solid = new THREE.Mesh(geometry, [mats.face, mats.side]);
+        solid.layers.enable(FRONT_LAYER);
         inner.add(solid);
         const occluder = new THREE.Mesh(geometry, mats.occluder);
         occluder.layers.set(GLOW_LAYER);
@@ -991,12 +1039,14 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         const backingGeometry = placeGeometry(new THREE.ExtrudeGeometry(shape, backingExtrude), offsetX, z - BEVEL_THICKNESS - 0.03);
         const backing = new THREE.Mesh(backingGeometry, mats.backing);
         backing.layers.enable(GLOW_LAYER);
+        backing.layers.enable(FRONT_LAYER);
         inner.add(backing);
 
         const lines = [];
         for (const loop of loopsFor(shape, offsetX)) {
             const core = makeLine(loop, (x, y) => colorAt(x, y).clone().lerp(white, 0.5), z + FRONT_Z + 0.004, 0.036, 0);
             const glow = makeLine(loop, colorAt, z + FRONT_Z + 0.004, 0.055, GLOW_LAYER);
+            core.layers.enable(FRONT_LAYER);
             for (const line of [core, glow]) {
                 if (mats.clip) line.material.clippingPlanes = mats.clip;
                 inner.add(line);
@@ -1104,10 +1154,8 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
     // linear target would crush to black. Sampling decodes back to linear.
     const targetOptions = { colorSpace: THREE.SRGBColorSpace };
     const target = new THREE.WebGLRenderTarget(1, 1, { ...targetOptions, samples: 4 });
-    const glowTarget = new THREE.WebGLRenderTarget(1, 1, targetOptions);
-    const blurA = new THREE.WebGLRenderTarget(1, 1, targetOptions);
-    const blurB = new THREE.WebGLRenderTarget(1, 1, targetOptions);
-    const blur = makeBlurPass();
+    const frontTarget = new THREE.WebGLRenderTarget(1, 1, { ...targetOptions, samples: 4 });
+    const bloom = createBloom(renderer);
     const lineMaterials = [];
     scene.traverse((o) => { if (o.isLine2) lineMaterials.push(o.material); });
 
@@ -1124,9 +1172,8 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         width = w;
         height = h;
         target.setSize(w, h);
-        glowTarget.setSize(Math.ceil(w / 2), Math.ceil(h / 2));
-        blurA.setSize(Math.ceil(w / 4), Math.ceil(h / 4));
-        blurB.setSize(Math.ceil(w / 4), Math.ceil(h / 4));
+        frontTarget.setSize(w, h);
+        bloom.setSize(w, h);
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         for (const m of lineMaterials) m.resolution.set(w, h);
@@ -1217,9 +1264,12 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
     }
 
     // ---- Knocking letters off ----------------------------------------------
-    // A standalone copy of a letter for the scene to fling onto the grid: the
-    // chrome solid, its dark outline and neon lines (with a faint additive
-    // copy standing in for the bloom), centred on the letter, in letter units.
+    // A standalone copy of a letter for the scene to fling onto the grid,
+    // centred on the letter, in letter units: the chrome solid and its neon
+    // line, plus a glow layer (GLOW_LAYER) for the scene to bloom as the
+    // logo does, with a black stand-in so the glow rings the letter rather
+    // than washing over it. The dark outline slab is left off: it only reads
+    // as an outline face-on, packed between the other letters.
     function makeDebris(letter) {
         const group = new THREE.Group();
         const inner = new THREE.Group();
@@ -1227,31 +1277,35 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         group.add(inner);
         const face = faceMaterial.clone();
         const side = sideMaterial.clone();
-        const backing = backingMaterial.clone();
-        for (const m of [face, side, backing]) m.transparent = true;
-        const core = new LineMaterial({ vertexColors: true, worldUnits: true, transparent: true });
-        const glow = new LineMaterial({ vertexColors: true, worldUnits: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-        inner.add(new THREE.Mesh(letter.geometry, [face, side]), new THREE.Mesh(letter.backingGeometry, backing));
-        for (const line of letter.lines) inner.add(new Line2(line.core, core), new Line2(line.glow, glow));
-        group.traverse((o) => {
-            o.renderOrder = 5;
-            o.frustumCulled = false;
-        });
-        const materials = [face, side, backing, core, glow];
+        for (const m of [face, side]) m.transparent = true;
+        const core = new LineMaterial({ vertexColors: true, transparent: true });
+        const glow = new LineMaterial({ vertexColors: true });
+        const occluder = occluderMaterial.clone();
+        const glowOccluder = new THREE.Mesh(letter.geometry, occluder);
+        glowOccluder.layers.set(GLOW_LAYER);
+        inner.add(new THREE.Mesh(letter.geometry, [face, side]), glowOccluder);
+        for (const line of letter.lines) {
+            const glowLine = new Line2(line.glow, glow);
+            glowLine.layers.set(GLOW_LAYER);
+            inner.add(new Line2(line.core, core), glowLine);
+        }
+        group.traverse((o) => { o.frustumCulled = false; });
+        const materials = [face, side, core, glow, occluder];
         return {
             group,
             setFade(opacity) {
                 face.uniforms.uOpacity.value = opacity;
-                side.opacity = backing.opacity = core.opacity = opacity;
-                glow.opacity = 0.45 * opacity;
+                side.opacity = core.opacity = opacity;
+                glow.color.setScalar(opacity);
             },
-            // unitsPerLetterUnit: the group's scale, as line widths are in
-            // world units; resolution: the drawing buffer size.
-            setScale(unitsPerLetterUnit, resolution) {
-                core.linewidth = 0.036 * unitsPerLetterUnit;
-                glow.linewidth = 0.11 * unitsPerLetterUnit;
+            // pxPerUnit: on-screen CSS px per letter unit; resolution and
+            // glowResolution: the sizes of the targets the lines draw into,
+            // in device px.
+            setScale(pxPerUnit, resolution, glowResolution, pixelRatio) {
+                core.linewidth = 0.036 * pxPerUnit * pixelRatio;
+                glow.linewidth = 0.055 * pxPerUnit * pixelRatio * (glowResolution.y / resolution.y);
                 core.resolution.copy(resolution);
-                glow.resolution.copy(resolution);
+                glow.resolution.copy(glowResolution);
             },
             dispose() {
                 for (const m of materials) m.dispose();
@@ -1281,8 +1335,8 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
 
     // Takes a resting letter off the logo and hands back a copy for the
     // scene to animate, with where it was: x, y in the CSS logo box (-1 to 1,
-    // y down), its size (letter units per box height) and its rotation. A
-    // replacement then orbits in.
+    // y down), its size (letter units per box height) and its rotation, plus
+    // the bottom of the disc (box y). A replacement then orbits in.
     const knockPoint = new THREE.Vector3();
     function knock(index) {
         const letter = letters[index];
@@ -1297,6 +1351,7 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
             y: -knockPoint.y * LOGO_PADDING,
             scale: TEXT_SCALE / FRAME_HEIGHT,
             rotation: { x: root.rotation.x, y: root.rotation.y, z: TILT },
+            discBottom: DISC_RADIUS / (FRAME_HEIGHT / 2),
         };
     }
 
@@ -1419,14 +1474,9 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
     }
 
     const clearColor = new THREE.Color();
-    function blurPass(input, output, dx, dy) {
-        blur.material.uniforms.tInput.value = input.texture;
-        blur.material.uniforms.uStep.value.set(dx / input.width, dy / input.height);
-        renderer.setRenderTarget(output);
-        renderer.render(blur.scene, blur.camera);
-    }
-
-    function render() {
+    // front: also render the letters and swoosh alone (frontTexture), for
+    // the scene to draw over knocked-off letters.
+    function render({ front = false } = {}) {
         const prevTarget = renderer.getRenderTarget();
         renderer.getClearColor(clearColor);
         const prevAlpha = renderer.getClearAlpha();
@@ -1440,15 +1490,15 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         renderer.render(scene, camera);
 
         camera.layers.set(GLOW_LAYER);
-        sparks.dotMaterial.uniforms.uViewport.value = glowTarget.height;
-        renderer.setRenderTarget(glowTarget);
-        renderer.clear();
-        renderer.render(scene, camera);
+        sparks.dotMaterial.uniforms.uViewport.value = bloom.target.height;
+        bloom.render(scene, camera);
 
-        blurPass(glowTarget, blurA, 1, 0);
-        blurPass(blurA, blurB, 0, 1);
-        blurPass(blurB, blurA, 1.5, 0);
-        blurPass(blurA, blurB, 0, 1.5);
+        if (front) {
+            camera.layers.set(FRONT_LAYER);
+            renderer.setRenderTarget(frontTarget);
+            renderer.clear();
+            renderer.render(scene, camera);
+        }
 
         renderer.setRenderTarget(prevTarget);
         renderer.setClearColor(clearColor, prevAlpha);
@@ -1457,8 +1507,9 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
     return {
         padding: LOGO_PADDING,
         texture: target.texture,
-        glowTight: glowTarget.texture,
-        glowWide: blurB.texture,
+        frontTexture: frontTarget.texture,
+        glowTight: bloom.tight,
+        glowWide: bloom.wide,
         setSize,
         update,
         render,

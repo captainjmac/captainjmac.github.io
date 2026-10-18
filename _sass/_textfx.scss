@@ -38,6 +38,13 @@
     @include flicker();
 }
 
+// A dark aura round neon text. A filter, so it sits under the glow whatever
+// the flicker animation does to text-shadow.
+.ominous {
+    display: inline-block;
+    filter: drop-shadow(0 0 6px #000) drop-shadow(0 0 18px #000);
+}
+
 /* Optional Flicker Animation for Text */
 @keyframes flicker-text {
     0%, 18%, 22%, 25%, 53%, 57%, 100% {
