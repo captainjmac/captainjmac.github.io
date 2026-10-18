@@ -65,12 +65,13 @@ The site features a distinctive retro aesthetic:
 - Background scene rendered with three.js into one fixed `<canvas class="retro-canvas">` (`assets/js/retro-scene.js`; three.js loaded from CDN via an import map in `head-retro.html`). It draws the gradient sky, the scrolling perspective grid with its cursor spotlight, the logo with its floor reflection, and the twinkling starfield. The grid shader inverts the original CSS `perspective(85px) rotateX(8deg)` transform, so its geometry matches the old CSS grid.
 - The JMAC logo is a 3D model built in code (`assets/js/retro-logo.js`, loaded with a dynamic import). It has extruded italic letters with an 80s chrome face shader and mirror-chrome bevels, neon `Line2` outlines, the swoosh, a striped disc and a starry haze. It animates: the haze churns and twinkles, comets of light chase round the ring, the bloom breathes in a rolling wave, and the logo sways with glints and sparkles. It renders into its own render target, which the scene draws as a plane (plus a faint floor reflection). Its neon parts are blurred in a separate glow pass so the bloom never touches the grid. If the module or three's addons (`three/addons/` in the import map) fail to load, the scene falls back to drawing the PNG.
 - The logo's position is still controlled by CSS: `.foreground-container .jmac-logo.original` is laid out normally and the scene draws into its bounding box (the 3D logo renders `LOGO_PADDING` larger so glow and sway don't clip). Once a WebGL frame is drawn, the `<img>` is hidden via `html.webgl` but stays clickable, and it acts as the no-WebGL fallback.
+- On the landing page, clicking a letter knocks it off the logo (`hitTest`/`knock` in `retro-logo.js`). A copy of the letter is drawn in the main scene, not the logo's target, so it can leave the logo box. `retro-scene.js` flies it onto the grid using the grid shader's own CSS-perspective maths, lets it ride the grid and fades it out, while the logo orbits a replacement in over the top of the disc. Clicks off the letters still follow the logo's link.
 - All HTML (nav, portrait, tagline, `.main-pane` post panel) sits on top of the canvas
 - Neon text effects (`.neon-text-cyan`, `.neon-text-pink`)
 - CRT scanline overlay (`.scanlines`, CSS; drifts with a compositor-only transform)
 - Bulma is pinned to its dark theme (`data-theme="dark"` on `<html>`) so text stays light regardless of the OS colour scheme
 - Mobile layout (`max-width: 768px` in `_sass/_layout.scss`): content pages scroll as a normal document over the fixed canvas, with a small fixed logo under the nav
-- Landing page includes tagline: "Full-stack web developer • Fun-stacked game developer"
+- Landing page includes tagline: "Singularity-ready Product Engineer"
 
 ### Content Organization
 

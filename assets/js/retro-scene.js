@@ -40,6 +40,9 @@ function init() {
     // The shader inverts that transform per pixel to find the element-local
     // coordinate, then evaluates the same background pattern, so the
     // geometry matches the CSS version exactly.
+    const GRID_PERSPECTIVE = 85;
+    const GRID_TILT = THREE.MathUtils.degToRad(8);
+    const GRID_SPEED = 50; // px/s that the horizontal lines scroll, in grid-local px
     const gridUniforms = {
         uSize: { value: new THREE.Vector2(1, 1) },     // viewport, CSS px
         uPixelRatio: { value: renderer.getPixelRatio() },
@@ -62,8 +65,8 @@ function init() {
             uniform float uScroll;
             uniform vec2 uPointer;
 
-            const float PERSPECTIVE = 85.0;
-            const float TILT = 0.13962634; // 8deg
+            const float PERSPECTIVE = ${GRID_PERSPECTIVE.toFixed(1)};
+            const float TILT = ${GRID_TILT.toFixed(8)}; // 8deg
             const vec3 GRID_COLOR = vec3(64.0, 181.0, 229.0) / 255.0; // #40b5e5
 
             // .gradient-bg stops, bottom to top. The last stop is
@@ -276,6 +279,7 @@ function init() {
                 // replay on every page; reduced motion skips it.
                 const intro = document.body.classList.contains('landing') && !reducedMotion;
                 logo3d = createLogo(renderer, { starTexture, intro });
+                knockable = intro; // letters can be knocked off on the landing page
                 logoPadding = logo3d.padding;
                 window.__retroLogo = { logo3d, glow }; // dev handle for tuning the logo
                 glowMaterial.uniforms.tTight.value = logo3d.glowTight;
@@ -289,6 +293,199 @@ function init() {
                 console.warn('3D logo unavailable, using image', e);
                 loadPngLogo();
             });
+    }
+
+    // ---- Knocked-off letters ---------------------------------------------
+    // Clicking a letter on the landing page knocks it off the logo: it
+    // tumbles away into the distance, lands flat on the grid, bounces, rides
+    // the grid for a moment and fades, while the logo sends a new letter in
+    // over the top of the disc.
+    //
+    // The letter is drawn in its own 3D scene, not the logo's render, so it
+    // can leave the logo box. That scene's camera reproduces the grid's CSS
+    // perspective exactly: world units are CSS px (y up, as y = -cssY), the
+    // screen is the plane z = 0 and the eye sits GRID_PERSPECTIVE px in
+    // front of the grid's transform origin. The floor is the grid's plane,
+    // tilted GRID_TILT from the screen, so a letter lying in it is
+    // foreshortened just like the grid lines around it. Its path is worked
+    // out in the floor's frame: lx across, ly along the floor (the grid
+    // shader's element-local px relative to the transform origin, negative
+    // into the distance) and h, its height off the floor.
+    let knockable = false;
+    const debris = [];
+    const debrisScene = new THREE.Scene();
+    const gridCamera = new THREE.PerspectiveCamera();
+    const KNOCK_RIDE = 1.3;  // s riding the grid before fading
+    const KNOCK_FADE = 0.8;
+    const gridSin = Math.sin(GRID_TILT);
+    const gridCos = Math.cos(GRID_TILT);
+    const floorNormal = new THREE.Vector3(0, gridSin, gridCos);
+    const gridOriginY = () => 0.87 * size.h;
+    const smooth = (a, b, x) => {
+        const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+        return t * t * (3 - 2 * t);
+    };
+
+    // Off-axis frustum through the viewport, as seen from the CSS eye.
+    function updateGridCamera() {
+        const near = 1;
+        const f = near / GRID_PERSPECTIVE;
+        gridCamera.position.set(size.w / 2, -gridOriginY(), GRID_PERSPECTIVE);
+        gridCamera.updateMatrixWorld();
+        gridCamera.projectionMatrix.makePerspective(
+            -size.w / 2 * f, size.w / 2 * f, gridOriginY() * f, -(size.h - gridOriginY()) * f, near, 10000,
+        );
+        gridCamera.projectionMatrixInverse.copy(gridCamera.projectionMatrix).invert();
+    }
+
+    // World position of a point h px above the floor at (lx, ly).
+    function floorPoint(lx, ly, h, target) {
+        return target.set(size.w / 2 + lx, -(gridOriginY() + ly * gridCos), ly * gridSin)
+            .addScaledVector(floorNormal, h);
+    }
+
+    // Soft glow the letter casts on the grid as it comes down.
+    function makeSpotTexture() {
+        const S = 64;
+        const c = document.createElement('canvas');
+        c.width = c.height = S;
+        const ctx = c.getContext('2d');
+        const g = ctx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(0.4, 'rgba(255,255,255,0.35)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, S, S);
+        const texture = new THREE.CanvasTexture(c);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        return texture;
+    }
+    let spotTexture = null;
+    const spotGeometry = new THREE.PlaneGeometry(1, 1);
+
+    function launchDebris({ debris: piece, x, y, scale, rotation }, clickX) {
+        const cx = logoRect.left + logoRect.width / 2 + (x * logoRect.width) / 2;
+        const cy = logoRect.top + logoRect.height / 2 + (y * logoRect.height) / 2;
+        // The logo sits in the screen plane, where the grid's scale is 1, so
+        // the letter keeps its on-screen size there. In the floor's frame it
+        // starts a little way above the floor.
+        const ly0 = (cy - gridOriginY()) * gridCos;
+        const h0 = (gridOriginY() - cy) * gridSin;
+        // It lands well into the distance, between where it started and the
+        // grid's far edge; gravity is picked so the flight takes `flight`.
+        const flight = 0.95 + Math.random() * 0.25;
+        const farEdge = -gridOriginY();
+        const lyLand = ly0 + (farEdge - ly0) * (0.35 + Math.random() * 0.2);
+        const vh0 = 20 + Math.random() * 30;
+        // Away from where it was hit.
+        const dir = cx >= clickX ? 1 : -1;
+        if (!spotTexture) spotTexture = makeSpotTexture();
+        const spot = new THREE.Mesh(spotGeometry, new THREE.MeshBasicMaterial({
+            map: spotTexture,
+            color: Math.random() < 0.5 ? 0xff3fd8 : 0x4ff4ff,
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            opacity: 0,
+        }));
+        spot.rotation.x = -GRID_TILT; // lies in the floor
+        spot.renderOrder = 4;
+        const size_ = scale * logoRect.height; // letter units -> px
+        piece.group.scale.setScalar(size_);
+        piece.setScale(size_, renderer.getDrawingBufferSize(new THREE.Vector2()));
+        debrisScene.add(piece.group, spot);
+        debris.push({
+            piece, spot, flight, size: size_,
+            lx: cx - size.w / 2,
+            ly: ly0,
+            ly0,
+            h: h0,
+            h0,
+            vly: (lyLand - ly0) / flight,
+            vlx: dir * (40 + Math.random() * 80),
+            vh: vh0,
+            gravity: (2 * (h0 + vh0 * flight)) / (flight * flight),
+            age: 0,
+            from: rotation,
+            // Spins flat like a frisbee as it settles into the floor
+            // (tilted back by GRID_TILT). With the eye this close to the
+            // screen, a flip would swing the letter up to the camera.
+            to: {
+                x: -GRID_TILT,
+                y: 0,
+                z: -dir * (Math.PI * 2 + 0.15 + Math.random() * 0.4),
+            },
+        });
+    }
+
+    const debrisPoint = new THREE.Vector3();
+    function updateDebris(dt) {
+        for (let i = debris.length - 1; i >= 0; i--) {
+            const d = debris[i];
+            d.age += dt;
+            const { group } = d.piece;
+            if (d.age < d.flight) {
+                // Ballistic, spinning steadily to land flat.
+                const f = d.age / d.flight;
+                d.lx += d.vlx * dt;
+                d.ly = d.ly0 + d.vly * d.age;
+                d.h = d.h0 + d.vh * d.age - 0.5 * d.gravity * d.age * d.age;
+                group.rotation.set(
+                    d.from.x + (d.to.x - d.from.x) * f,
+                    d.from.y + (d.to.y - d.from.y) * f,
+                    d.from.z + (d.to.z - d.from.z) * f,
+                );
+            } else {
+                if (!d.landed) {
+                    // Bounce off the floor, then move with the grid.
+                    d.landed = true;
+                    d.vh = -(d.vh - d.gravity * d.flight) * 0.35;
+                    d.h = 0;
+                    d.vlx *= 0.5;
+                    group.rotation.set(d.to.x, d.to.y, d.to.z);
+                }
+                d.vh -= d.gravity * dt;
+                d.h += d.vh * dt;
+                if (d.h <= 0) {
+                    d.h = 0;
+                    d.vh = d.vh < -25 ? -d.vh * 0.35 : 0;
+                }
+                d.ly += GRID_SPEED * dt;
+                d.vlx *= Math.exp(-4 * dt);
+                d.lx += d.vlx * dt;
+            }
+            const fade = 1 - smooth(KNOCK_RIDE, KNOCK_RIDE + KNOCK_FADE, d.age - d.flight);
+            if (fade <= 0) {
+                debrisScene.remove(group, d.spot);
+                d.piece.dispose();
+                d.spot.material.dispose();
+                debris.splice(i, 1);
+                continue;
+            }
+            // Its lowest point rests on the floor once it lies flat, so it
+            // floats half its thickness up.
+            floorPoint(d.lx, d.ly, d.h + 0.1 * d.size, group.position);
+            d.piece.setFade(fade);
+            // The glow on the floor grows as the letter comes down onto it.
+            const near = 1 - Math.min(1, d.h / (d.size * 0.6));
+            floorPoint(d.lx, d.ly, 0.5, d.spot.position);
+            d.spot.scale.set(d.size * 1.4, d.size * 1.2, 1);
+            d.spot.material.opacity = 0.6 * near * near * fade;
+        }
+    }
+
+    if (logoEl) {
+        logoEl.addEventListener('click', (e) => {
+            if (!knockable || !logo3d || !logoRect) return;
+            const x = (e.clientX - (logoRect.left + logoRect.width / 2)) / (logoRect.width / 2);
+            const y = (e.clientY - (logoRect.top + logoRect.height / 2)) / (logoRect.height / 2);
+            const index = logo3d.hitTest(x, y);
+            if (index < 0) return; // off the letters, the logo is still a link
+            e.preventDefault();
+            const knocked = logo3d.knock(index);
+            if (knocked) launchDebris(knocked, e.clientX);
+        });
     }
 
     // Logo-relative pointer (-1..1 across the logo box), for the logo's lean.
@@ -464,6 +661,8 @@ function init() {
         camera.updateProjectionMatrix();
         gridUniforms.uSize.value.set(w, h);
         gridUniforms.uPixelRatio.value = renderer.getPixelRatio();
+        updateGridCamera();
+        for (const d of debris) d.piece.setScale(d.size, renderer.getDrawingBufferSize(new THREE.Vector2()));
         updateLogo();
         requestRender();
     }
@@ -489,6 +688,13 @@ function init() {
 
     function render() {
         renderer.render(scene, camera);
+        if (debris.length) {
+            // Knocked-off letters, over everything else on the canvas.
+            renderer.autoClear = false;
+            renderer.clearDepth();
+            renderer.render(debrisScene, gridCamera);
+            renderer.autoClear = true;
+        }
         // Hide the HTML logo only once a frame with the WebGL logo is drawn.
         if (logo.visible) document.documentElement.classList.add('webgl');
     }
@@ -507,6 +713,7 @@ function init() {
         }
         updateLogo(); // follows CSS layout changes, including transitions
         renderLogo(clock);
+        updateDebris(dt);
         updateStars(dt);
         render();
     }

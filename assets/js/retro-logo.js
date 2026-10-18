@@ -50,6 +50,9 @@ const STRIPE_DURATION = 1.2;
 // showering sparks.
 const BEAM_FADE = 0.35;      // the edge's heat fades this long after a piece is done
 const GLINT_LEAD = 0.5;      // the first glint sweeps this long before the intro ends
+// A letter knocked off the logo (landing page) is replaced by a new one that
+// orbits in over the top of the disc after this long.
+const KNOCK_RETURN_DELAY = 0.9;
 const MAX_SPARKS = 480;
 const SPARK_GRAVITY = 7;     // world units / s²
 
@@ -408,6 +411,7 @@ function makeChromeFaceMaterial(yMin = 0, yMax = 1) {
         clipping: true, // the intro reveals the swoosh with a clipping plane
         uniforms: {
             uSweep: { value: 99 },
+            uOpacity: { value: 1 }, // for knocked-off letters as they fade
             uBeam: { value: new THREE.Vector3(0, 0, 0) },
             uYRange: { value: new THREE.Vector2(yMin, yMax) },
             uSkyTop: { value: srgb('#060824') },
@@ -433,7 +437,7 @@ function makeChromeFaceMaterial(yMin = 0, yMax = 1) {
             }
         `,
         fragmentShader: /* glsl */ `
-            uniform float uSweep;
+            uniform float uSweep, uOpacity;
             uniform vec3 uBeam;
             uniform vec2 uYRange;
             uniform vec3 uSkyTop, uSkyMid, uSkyLow, uEdge;
@@ -499,7 +503,7 @@ function makeChromeFaceMaterial(yMin = 0, yMax = 1) {
                     col += (vec3(0.45, 0.9, 1.0) * trail * 0.4 * scan + vec3(1.0) * twinkle * 0.7) * uBeam.y;
                 }
 
-                gl_FragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(2.2)), 1.0);
+                gl_FragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(2.2)), uOpacity);
                 #include <colorspace_fragment>
             }
         `,
@@ -978,7 +982,8 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         pivot.add(inner);
         textGroup.add(pivot);
 
-        inner.add(new THREE.Mesh(geometry, [mats.face, mats.side]));
+        const solid = new THREE.Mesh(geometry, [mats.face, mats.side]);
+        inner.add(solid);
         const occluder = new THREE.Mesh(geometry, mats.occluder);
         occluder.layers.set(GLOW_LAYER);
         inner.add(occluder);
@@ -988,16 +993,17 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         backing.layers.enable(GLOW_LAYER);
         inner.add(backing);
 
+        const lines = [];
         for (const loop of loopsFor(shape, offsetX)) {
-            for (const line of [
-                makeLine(loop, (x, y) => colorAt(x, y).clone().lerp(white, 0.5), z + FRONT_Z + 0.004, 0.036, 0),
-                makeLine(loop, colorAt, z + FRONT_Z + 0.004, 0.055, GLOW_LAYER),
-            ]) {
+            const core = makeLine(loop, (x, y) => colorAt(x, y).clone().lerp(white, 0.5), z + FRONT_Z + 0.004, 0.036, 0);
+            const glow = makeLine(loop, colorAt, z + FRONT_Z + 0.004, 0.055, GLOW_LAYER);
+            for (const line of [core, glow]) {
                 if (mats.clip) line.material.clippingPlanes = mats.clip;
                 inner.add(line);
             }
+            lines.push({ core: core.geometry, glow: glow.geometry });
         }
-        return { pivot, center };
+        return { pivot, center, geometry, backingGeometry, lines, hitMeshes: [solid, backing] };
     }
 
     // Swoosh pieces get their own clipped copies of the shared materials, so
@@ -1138,6 +1144,13 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         const dz = letter.center.z - discCenter.z;
         letter.restRadius = Math.hypot(dx, dz);
         letter.restAngle = Math.atan2(dx, dz);
+        // The same about the disc's horizontal axis, for replacements that
+        // come in over the top (angle 0 toward the viewer, positive upward).
+        const dy = letter.center.y - discCenter.y;
+        letter.poleRadius = Math.hypot(dy, dz);
+        letter.poleAngle = Math.atan2(dy, dz);
+        letter.knockedAt = null;
+        letter.atRest = !intro;
     }
 
     const lettersLand = INTRO_DELAY + LETTER_STAGGER * (letters.length - 1) + LETTER_DURATION;
@@ -1176,6 +1189,115 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         );
         pivot.rotation.set(0, angle - restAngle, 0); // spins down to face front
         pivot.scale.setScalar(0.55 + 0.45 * e);
+    }
+
+    // A replacement for a knocked-off letter: the same wide-then-tightening
+    // orbit as the intro, but about the disc's horizontal axis, so it rises
+    // from behind the disc, comes over its north pole and drops into place,
+    // tumbling forward to face the front.
+    function placeLetterOverPole({ pivot, center, poleRadius, poleAngle }, t) {
+        if (t >= 1) {
+            pivot.position.copy(center);
+            pivot.rotation.set(0, 0, 0);
+            pivot.scale.setScalar(1);
+            return;
+        }
+        const e = easeOutCubic(t);
+        const angle = Math.PI + (poleAngle - Math.PI) * e;
+        const topFrom = Math.PI / 2;
+        const tighten = Math.min(1, Math.max(0, (topFrom - angle) / Math.max(topFrom - poleAngle, 0.05)));
+        const radius = orbitRadius + (poleRadius - orbitRadius) * tighten;
+        pivot.position.set(
+            center.x,
+            discCenter.y + Math.sin(angle) * radius,
+            discCenter.z + Math.cos(angle) * radius,
+        );
+        pivot.rotation.set(poleAngle - angle, 0, 0);
+        pivot.scale.setScalar(0.55 + 0.45 * e);
+    }
+
+    // ---- Knocking letters off ----------------------------------------------
+    // A standalone copy of a letter for the scene to fling onto the grid: the
+    // chrome solid, its dark outline and neon lines (with a faint additive
+    // copy standing in for the bloom), centred on the letter, in letter units.
+    function makeDebris(letter) {
+        const group = new THREE.Group();
+        const inner = new THREE.Group();
+        inner.position.copy(letter.center).negate();
+        group.add(inner);
+        const face = faceMaterial.clone();
+        const side = sideMaterial.clone();
+        const backing = backingMaterial.clone();
+        for (const m of [face, side, backing]) m.transparent = true;
+        const core = new LineMaterial({ vertexColors: true, worldUnits: true, transparent: true });
+        const glow = new LineMaterial({ vertexColors: true, worldUnits: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+        inner.add(new THREE.Mesh(letter.geometry, [face, side]), new THREE.Mesh(letter.backingGeometry, backing));
+        for (const line of letter.lines) inner.add(new Line2(line.core, core), new Line2(line.glow, glow));
+        group.traverse((o) => {
+            o.renderOrder = 5;
+            o.frustumCulled = false;
+        });
+        const materials = [face, side, backing, core, glow];
+        return {
+            group,
+            setFade(opacity) {
+                face.uniforms.uOpacity.value = opacity;
+                side.opacity = backing.opacity = core.opacity = opacity;
+                glow.opacity = 0.45 * opacity;
+            },
+            // unitsPerLetterUnit: the group's scale, as line widths are in
+            // world units; resolution: the drawing buffer size.
+            setScale(unitsPerLetterUnit, resolution) {
+                core.linewidth = 0.036 * unitsPerLetterUnit;
+                glow.linewidth = 0.11 * unitsPerLetterUnit;
+                core.resolution.copy(resolution);
+                glow.resolution.copy(resolution);
+            },
+            dispose() {
+                for (const m of materials) m.dispose();
+            },
+        };
+    }
+
+    // Which resting letter is under a point of the CSS logo box (x, y from
+    // -1 to 1, y down), or -1.
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    function hitTest(x, y) {
+        ndc.set(x / LOGO_PADDING, -y / LOGO_PADDING);
+        raycaster.setFromCamera(ndc, camera);
+        let best = -1;
+        let bestDistance = Infinity;
+        letters.forEach((letter, i) => {
+            if (!letter.atRest) return;
+            const hit = raycaster.intersectObjects(letter.hitMeshes, false)[0];
+            if (hit && hit.distance < bestDistance) {
+                best = i;
+                bestDistance = hit.distance;
+            }
+        });
+        return best;
+    }
+
+    // Takes a resting letter off the logo and hands back a copy for the
+    // scene to animate, with where it was: x, y in the CSS logo box (-1 to 1,
+    // y down), its size (letter units per box height) and its rotation. A
+    // replacement then orbits in.
+    const knockPoint = new THREE.Vector3();
+    function knock(index) {
+        const letter = letters[index];
+        if (!letter || !letter.atRest) return null;
+        letter.atRest = false;
+        letter.knockedAt = lastTime ?? 0;
+        letter.pivot.visible = false;
+        letter.pivot.getWorldPosition(knockPoint).project(camera);
+        return {
+            debris: makeDebris(letter),
+            x: knockPoint.x * LOGO_PADDING,
+            y: -knockPoint.y * LOGO_PADDING,
+            scale: TEXT_SCALE / FRAME_HEIGHT,
+            rotation: { x: root.rotation.x, y: root.rotation.y, z: TILT },
+        };
     }
 
     // Keeps everything left of the (italic-slanted) edge at x = edge.
@@ -1248,8 +1370,21 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         if (introStart === null) introStart = time;
         const t = intro ? time - introStart : Infinity;
         letters.forEach((letter, i) => {
+            if (letter.knockedAt !== null) {
+                // Knocked off: gone for a moment, then the replacement.
+                const p = (time - letter.knockedAt - KNOCK_RETURN_DELAY) / LETTER_DURATION;
+                letter.pivot.visible = p > 0;
+                placeLetterOverPole(letter, Math.max(0, p));
+                if (p >= 1) {
+                    letter.knockedAt = null;
+                    letter.atRest = true;
+                }
+                return;
+            }
             // Letters wait behind the disc (progress 0) until their turn.
-            placeLetter(letter, Math.max(0, (t - INTRO_DELAY - i * LETTER_STAGGER) / LETTER_DURATION));
+            const p = (t - INTRO_DELAY - i * LETTER_STAGGER) / LETTER_DURATION;
+            placeLetter(letter, Math.max(0, p));
+            letter.atRest = p >= 1;
         });
         root.updateMatrixWorld(true);
         const swooshEdge = setReveal(swooshMats, easeInOutSine(Math.min(1, Math.max(0, (t - swooshStart) / SWOOSH_DURATION))));
@@ -1272,8 +1407,11 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         const sweep = cycle < 1.6 ? -1.5 + (cycle / 1.6) * 6 : 99;
         for (const m of faceMaterials) m.uniforms.uSweep.value = sweep;
 
+        // The sparkles sit on the letters' corners, so they rest while any
+        // letter is away.
+        const allHome = letters.every((letter) => letter.knockedAt === null);
         for (const s of sparkles) {
-            const f = introDone ? Math.pow(Math.max(0, Math.sin(Math.PI * 2 * (sinceIntro / s.period + s.phase))), 12) : 0;
+            const f = introDone && allHome ? Math.pow(Math.max(0, Math.sin(Math.PI * 2 * (sinceIntro / s.period + s.phase))), 12) : 0;
             s.sprite.material.opacity = f;
             s.sprite.scale.setScalar((0.6 * f) / TEXT_SCALE);
             s.sprite.visible = f > 0.01;
@@ -1324,5 +1462,7 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         setSize,
         update,
         render,
+        hitTest,
+        knock,
     };
 }
