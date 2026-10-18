@@ -483,13 +483,16 @@ function makeDiscMaterial() {
                 // Neon tint runs cyan (top-left) to magenta (bottom-right).
                 vec3 tint = mix(uMagenta, uCyan, smoothstep(-0.7, 0.7, (vP.y - vP.x) * 0.7));
 
-                // Thin horizontal speed streaks, strongest toward the left and
-                // the bottom of the disc, fading in toward the middle.
-                float band = fract(vP.y * 13.0);
-                float stripe = smoothstep(0.0, 0.03, band) * (1.0 - smoothstep(0.09, 0.13, band));
-                float streakMask = max(smoothstep(0.1, -0.85, vP.x) * smoothstep(0.75, 0.2, vP.y),
-                                       smoothstep(-0.25, -0.8, vP.y));
-                col += tint * stripe * streakMask * 0.55;
+                // Horizontal streaks. They thicken toward the bottom like a
+                // retro sunset. Strongest on the left and along the bottom,
+                // with a softer full-disc layer so they show above the logo.
+                float band = fract(vP.y * 12.0);
+                float width = mix(0.135, 0.195, smoothstep(0.9, -0.9, vP.y));
+                float stripe = smoothstep(0.0, 0.03, band) * (1.0 - smoothstep(width, width + 0.04, band));
+                float edgeMask = max(smoothstep(0.1, -0.85, vP.x) * smoothstep(0.75, 0.2, vP.y),
+                                     smoothstep(-0.25, -0.8, vP.y));
+                float discMask = mix(0.6, 1.0, smoothstep(0.9, -0.9, vP.y)) * (0.75 + 0.25 * smoothstep(0.3, -0.9, vP.x));
+                col += tint * stripe * (edgeMask * 0.275 + discMask * 0.25);
 
                 float rim = smoothstep(0.88, 0.995, r);
                 col += tint * pow(rim, 2.0) * 0.45;
