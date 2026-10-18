@@ -34,17 +34,24 @@ const MAX_TARGET_SIZE = 1600; // px, per side
 export const LOGO_PADDING = 1.4;
 
 // Intro (landing page): the letters swing out from behind the disc on a
-// tilted orbit, one after another, then the swoosh and stripe draw in from
-// left to right. Times in seconds.
+// tilted orbit, one after another; while they settle, the swoosh and stripe
+// are beamed in from left to right by a spark-spraying point of light.
+// Times in seconds.
 const INTRO_DELAY = 0.2;
 const LETTER_STAGGER = 0.22;
 const LETTER_DURATION = 2.2;
 const ORBIT_RADIUS = 1.45;   // starting orbit, as a multiple of the disc radius
 const ORBIT_RISE = 0.45;     // letters start this far above (text units), sinking into place
-const SWOOSH_LEAD = 0.95;    // starts this long before the last letter lands
+const SWOOSH_LEAD = 1.95;    // starts this long before the last letter lands
 const SWOOSH_DURATION = 1.6;
 const STRIPE_LAG = 0.6;      // after the swoosh starts
 const STRIPE_DURATION = 1.2;
+// A point of light rides each reveal edge, beaming the piece in and
+// showering sparks.
+const BEAM_FADE = 0.35;      // the edge's heat fades this long after a piece is done
+const GLINT_LEAD = 0.5;      // the first glint sweeps this long before the intro ends
+const MAX_SPARKS = 480;
+const SPARK_GRAVITY = 7;     // world units / s²
 
 const easeOutCubic = (t) => 1 - (1 - t) ** 3;
 const easeInOutSine = (t) => 0.5 - 0.5 * Math.cos(Math.PI * t);
@@ -393,12 +400,15 @@ function makeHazeMaterial() {
 // The horizon slides with the face's view-space normal so the reflection
 // shifts as the logo sways, and a glint sweeps across every few seconds.
 // yRange maps the shape's own height onto the gradient, so thin pieces like
-// the swoosh get the full sweep too.
+// the swoosh get the full sweep too. uBeam heats the freshly revealed part
+// of the swoosh pieces as the intro beams them in (x: the reveal edge in
+// unsheared units, y: strength, z: time).
 function makeChromeFaceMaterial(yMin = 0, yMax = 1) {
     return new THREE.ShaderMaterial({
         clipping: true, // the intro reveals the swoosh with a clipping plane
         uniforms: {
             uSweep: { value: 99 },
+            uBeam: { value: new THREE.Vector3(0, 0, 0) },
             uYRange: { value: new THREE.Vector2(yMin, yMax) },
             uSkyTop: { value: srgb('#060824') },
             uSkyMid: { value: srgb('#2f63ff') },
@@ -424,12 +434,17 @@ function makeChromeFaceMaterial(yMin = 0, yMax = 1) {
         `,
         fragmentShader: /* glsl */ `
             uniform float uSweep;
+            uniform vec3 uBeam;
             uniform vec2 uYRange;
             uniform vec3 uSkyTop, uSkyMid, uSkyLow, uEdge;
             uniform vec3 uGroundTop, uGroundMid, uGroundHot, uGroundLow, uStreak;
             varying vec2 vShape;
             varying vec3 vNormalV;
             #include <clipping_planes_pars_fragment>
+
+            float hash(vec2 p) {
+                return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+            }
 
             void main() {
                 #include <clipping_planes_fragment>
@@ -469,6 +484,20 @@ function makeChromeFaceMaterial(yMin = 0, yMax = 1) {
 
                 float glint = exp(-pow((vShape.x * 0.4 + vShape.y * 0.7 - uSweep) * 6.0, 2.0));
                 col += vec3(1.0, 0.95, 1.0) * glint * 0.8;
+
+                // Beam-in: white-hot right behind the reveal edge, then a
+                // cyan afterglow with transporter-style twinkles that cools
+                // off along the piece.
+                float behind = uBeam.x - (vShape.x - ${SHEAR.toFixed(2)} * vShape.y);
+                if (uBeam.y > 0.0 && behind >= 0.0) {
+                    float heat = exp(-behind * 16.0);
+                    float trail = exp(-behind * 3.0);
+                    float n = hash(floor(gl_FragCoord.xy / 2.0) + floor(uBeam.z * 24.0) * 7.31);
+                    float twinkle = smoothstep(0.86, 0.98, n) * trail;
+                    float scan = 0.75 + 0.25 * sin(gl_FragCoord.y * 1.4 - uBeam.z * 40.0);
+                    col = mix(col, vec3(1.0, 0.97, 0.92), heat * 0.9 * uBeam.y);
+                    col += (vec3(0.45, 0.9, 1.0) * trail * 0.4 * scan + vec3(1.0) * twinkle * 0.7) * uBeam.y;
+                }
 
                 gl_FragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(2.2)), 1.0);
                 #include <colorspace_fragment>
@@ -613,6 +642,215 @@ function makeBlurPass() {
     scene.add(quad);
     const camera = new THREE.Camera();
     return { material, scene, camera };
+}
+
+// ---- Beam-in light and sparks -----------------------------------------------------
+// The logo target holds premultiplied colour, so light is added in
+// premultiplied form: colour adds up, alpha builds like normal "over".
+const LIGHT_BLENDING = {
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    premultipliedAlpha: true,
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneFactor,
+    blendSrcAlpha: THREE.OneFactor,
+    blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+};
+
+// White-hot glare, either a round core or an anamorphic flare: a long
+// horizontal streak with a fainter vertical one.
+function makeGlareTexture(flare) {
+    const S = 256;
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const ctx = c.getContext('2d');
+    const m = S / 2;
+    if (flare) {
+        for (const [rot, length, alpha] of [[0, m, 1], [Math.PI / 2, m * 0.45, 0.5]]) {
+            ctx.save();
+            ctx.translate(m, m);
+            ctx.rotate(rot);
+            const streak = ctx.createLinearGradient(-length, 0, length, 0);
+            streak.addColorStop(0, 'rgba(255,255,255,0)');
+            streak.addColorStop(0.5, `rgba(255,255,255,${alpha})`);
+            streak.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = streak;
+            ctx.fillRect(-length, -2, length * 2, 4);
+            ctx.restore();
+        }
+    } else {
+        const glare = ctx.createRadialGradient(m, m, 0, m, m, m);
+        glare.addColorStop(0, 'rgba(255,255,255,1)');
+        glare.addColorStop(0.08, 'rgba(255,255,255,0.95)');
+        glare.addColorStop(0.22, 'rgba(255,255,255,0.35)');
+        glare.addColorStop(0.5, 'rgba(255,255,255,0.08)');
+        glare.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = glare;
+        ctx.fillRect(0, 0, S, S);
+    }
+    const texture = new THREE.CanvasTexture(c);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+// Where a vertical line at x crosses a closed polygon: the middle of its
+// span, or null if it misses.
+function midlineAt(points, x) {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < points.length; i++) {
+        const [x0, y0] = points[i];
+        const [x1, y1] = points[(i + 1) % points.length];
+        if ((x0 <= x && x <= x1) || (x1 <= x && x <= x0)) {
+            const y = x0 === x1 ? (y0 + y1) / 2 : y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+            lo = Math.min(lo, y);
+            hi = Math.max(hi, y);
+        }
+    }
+    return lo <= hi ? (lo + hi) / 2 : null;
+}
+
+// Sparks that spray from the beam and rain down. They live in world space,
+// so they fall straight down whatever the logo's sway. Each spark draws as a
+// soft dot plus a short motion-blur streak behind it.
+function makeSparks() {
+    const pos = new Float32Array(MAX_SPARKS * 3);
+    const vel = new Float32Array(MAX_SPARKS * 3);
+    const age = new Float32Array(MAX_SPARKS);
+    const life = new Float32Array(MAX_SPARKS); // 0 = free
+    const size = new Float32Array(MAX_SPARKS);
+    const cool = new Uint8Array(MAX_SPARKS);   // 1 = cyan spark, 0 = hot orange
+
+    const dotPositions = new THREE.BufferAttribute(new Float32Array(MAX_SPARKS * 3), 3);
+    const dotColors = new THREE.BufferAttribute(new Float32Array(MAX_SPARKS * 4), 4);
+    const dotSizes = new THREE.BufferAttribute(new Float32Array(MAX_SPARKS), 1);
+    const dotGeometry = new THREE.BufferGeometry();
+    dotGeometry.setAttribute('position', dotPositions);
+    dotGeometry.setAttribute('aColor', dotColors);
+    dotGeometry.setAttribute('aSize', dotSizes);
+    const dotMaterial = new THREE.ShaderMaterial({
+        ...LIGHT_BLENDING,
+        uniforms: { uViewport: { value: 1 } },
+        vertexShader: /* glsl */ `
+            attribute vec4 aColor;
+            attribute float aSize;
+            uniform float uViewport;
+            varying vec4 vColor;
+            void main() {
+                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+                // aSize is in world units; uViewport is the target height.
+                gl_PointSize = max(1.0, aSize * projectionMatrix[1][1] * uViewport * 0.5 / -mvPosition.z);
+                vColor = aColor;
+            }
+        `,
+        fragmentShader: /* glsl */ `
+            varying vec4 vColor;
+            void main() {
+                float d = length(gl_PointCoord - 0.5) * 2.0;
+                float a = vColor.a * pow(max(0.0, 1.0 - d), 1.5);
+                gl_FragColor = vec4(vColor.rgb * a, a);
+            }
+        `,
+    });
+    const dots = new THREE.Points(dotGeometry, dotMaterial);
+    dots.layers.enable(GLOW_LAYER);
+
+    const streakPositions = new THREE.BufferAttribute(new Float32Array(MAX_SPARKS * 6), 3);
+    const streakColors = new THREE.BufferAttribute(new Float32Array(MAX_SPARKS * 8), 4);
+    const streakGeometry = new THREE.BufferGeometry();
+    streakGeometry.setAttribute('position', streakPositions);
+    streakGeometry.setAttribute('color', streakColors);
+    const streaks = new THREE.LineSegments(streakGeometry, new THREE.LineBasicMaterial({ ...LIGHT_BLENDING, vertexColors: true }));
+
+    for (const o of [dots, streaks]) {
+        o.frustumCulled = false;
+        o.renderOrder = 12;
+    }
+
+    // Hot sparks cool from white through gold and orange to a dull pink;
+    // the odd cyan one cools to magenta.
+    const hot = [color('#ffffff'), color('#ffe9a0'), color('#ff9a3c'), color('#c8306a')];
+    const cold = [color('#ffffff'), color('#9ff8ff'), color('#4ff4ff'), color('#b03ad8')];
+    const tint = new THREE.Color();
+    function colorAt(ramp, f) {
+        const x = Math.min(0.999, f) * (ramp.length - 1);
+        const i = Math.floor(x);
+        return tint.copy(ramp[i]).lerp(ramp[i + 1], x - i);
+    }
+
+    let next = 0;
+    function emit(x, y, z, drift) {
+        // Reuse the oldest slot if all are busy.
+        let i = next;
+        for (let k = 0; k < MAX_SPARKS; k++) {
+            const j = (next + k) % MAX_SPARKS;
+            if (life[j] === 0) {
+                i = j;
+                break;
+            }
+        }
+        next = (i + 1) % MAX_SPARKS;
+        const speed = 0.5 + Math.random() * 1.1;
+        const a = Math.random() * Math.PI * 2;
+        pos[i * 3] = x;
+        pos[i * 3 + 1] = y;
+        pos[i * 3 + 2] = z;
+        vel[i * 3] = Math.cos(a) * 2.2 * speed + drift;
+        vel[i * 3 + 1] = Math.sin(a) * 1.4 * speed + 0.5;
+        vel[i * 3 + 2] = (Math.random() - 0.3) * 1.2;
+        age[i] = 0;
+        life[i] = 0.5 + Math.random() * 0.7;
+        size[i] = 0.05 + Math.random() * 0.05;
+        cool[i] = Math.random() < 0.22 ? 1 : 0;
+    }
+
+    // halfWidth / halfHeight: the visible frame at z = 0, so sparks fade out
+    // before they reach the edge of the logo's render target.
+    function update(dt, halfWidth, halfHeight) {
+        const drag = Math.exp(-1.4 * dt);
+        let n = 0;
+        for (let i = 0; i < MAX_SPARKS; i++) {
+            if (life[i] === 0) continue;
+            age[i] += dt;
+            if (age[i] >= life[i]) {
+                life[i] = 0;
+                continue;
+            }
+            const i3 = i * 3;
+            vel[i3] *= drag;
+            vel[i3 + 1] = vel[i3 + 1] * drag - SPARK_GRAVITY * dt;
+            vel[i3 + 2] *= drag;
+            pos[i3] += vel[i3] * dt;
+            pos[i3 + 1] += vel[i3 + 1] * dt;
+            pos[i3 + 2] += vel[i3 + 2] * dt;
+
+            const f = age[i] / life[i];
+            const edge = smoothstep(1, 0.8, Math.abs(pos[i3]) / halfWidth) * smoothstep(1, 0.8, Math.abs(pos[i3 + 1]) / halfHeight);
+            const alpha = (1 - f) ** 1.5 * edge * (0.75 + Math.random() * 0.25); // a little flicker
+            const c = colorAt(cool[i] ? cold : hot, f);
+
+            dotPositions.array.set([pos[i3], pos[i3 + 1], pos[i3 + 2]], n * 3);
+            dotColors.array.set([c.r, c.g, c.b, alpha], n * 4);
+            dotSizes.array[n] = size[i] * (1 - 0.5 * f);
+            // The streak trails back along the spark's path.
+            const t = 0.045;
+            streakPositions.array.set([
+                pos[i3], pos[i3 + 1], pos[i3 + 2],
+                pos[i3] - vel[i3] * t, pos[i3 + 1] - vel[i3 + 1] * t, pos[i3 + 2] - vel[i3 + 2] * t,
+            ], n * 6);
+            streakColors.array.set([c.r, c.g, c.b, alpha * 0.8, c.r, c.g, c.b, 0], n * 8);
+            n++;
+        }
+        for (const a of [dotPositions, dotColors, dotSizes, streakPositions, streakColors]) a.needsUpdate = true;
+        dotGeometry.setDrawRange(0, n);
+        streakGeometry.setDrawRange(0, n * 2);
+        dots.visible = streaks.visible = n > 0;
+    }
+
+    return { objects: [dots, streaks], dotMaterial, emit, update };
 }
 
 // ---- Logo ----------------------------------------------------------------------
@@ -784,10 +1022,12 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
     const letters = LETTERS.map(({ shape, x }) => buildPiece(shape(), x, 0, letterMats, letterColor));
 
     const swooshMats = clippedMaterials(swooshFaceMaterial);
-    buildPiece(swooshMain(), 0, SWOOSH_Z, swooshMats,
+    const swooshShape = swooshMain();
+    buildPiece(swooshShape, 0, SWOOSH_Z, swooshMats,
         (x, y) => orange.clone().lerp(cyan, smoothstep(SWOOSH_BOTTOM, SWOOSH_TOP - 0.01, y)));
     const stripeMats = clippedMaterials(stripeFaceMaterial);
-    buildPiece(swooshStripe(), 0, SWOOSH_Z * 2, stripeMats, () => magenta);
+    const stripeShape = swooshStripe();
+    buildPiece(stripeShape, 0, SWOOSH_Z * 2, stripeMats, () => magenta);
 
     // Sparkles that flash on the chrome now and then.
     const sparkles = [];
@@ -809,6 +1049,49 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
             sparkles.push({ sprite, phase: i * 0.37 + Math.random() * 0.2, period: 4 + Math.random() * 3 });
         });
     }
+
+    // Beam-in: a point of light for the swoosh and one for the stripe, each
+    // a white-hot core with a tinted glare and anamorphic flare, plus the
+    // sparks they throw off.
+    const glareTexture = makeGlareTexture(false);
+    const flareTexture = makeGlareTexture(true);
+    function makeBeam(shape, face, mats, size, haloColor, sparkRate) {
+        // The outline in unsheared text-local units, which the reveal edge
+        // is measured in.
+        const outline = shape.extractPoints(24).shape.map((p) => [p.x * LETTER_WIDTH, p.y]);
+        const xs = outline.map(([x]) => x);
+        const group = new THREE.Group();
+        group.visible = false;
+        const sprite = (map, tint, scale) => {
+            const s = new THREE.Sprite(new THREE.SpriteMaterial({
+                // Sprites don't premultiply in their shader, so the blend does.
+                ...LIGHT_BLENDING, premultipliedAlpha: false, blendSrc: THREE.SrcAlphaFactor,
+                map, color: tint, rotation: TILT,
+            }));
+            s.layers.enable(GLOW_LAYER);
+            s.renderOrder = 11;
+            s.userData.scale = (scale * size) / TEXT_SCALE;
+            group.add(s);
+            return s;
+        };
+        const sprites = [
+            sprite(glareTexture, haloColor, 2.0),
+            sprite(flareTexture, haloColor.clone().lerp(white, 0.3), 4.2),
+            sprite(glareTexture, white, 0.8),
+        ];
+        textGroup.add(group);
+        return {
+            face, mats, outline, group, sprites, sparkRate,
+            minX: Math.min(...xs), maxX: Math.max(...xs),
+            z: SWOOSH_Z + FRONT_Z + 0.08, carry: 0, last: null,
+        };
+    }
+    const beams = intro ? [
+        makeBeam(swooshShape, swooshFaceMaterial, swooshMats, 1, color('#7ff6ff'), 230),
+        makeBeam(stripeShape, stripeFaceMaterial, stripeMats, 0.7, color('#ff6ae0'), 130),
+    ] : [];
+    const sparks = makeSparks();
+    if (intro) scene.add(...sparks.objects);
 
     // ---- Render targets ----------------------------------------------------
     // sRGB storage keeps precision in the dark navy shades, which an 8-bit
@@ -860,11 +1143,12 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
     const lettersLand = INTRO_DELAY + LETTER_STAGGER * (letters.length - 1) + LETTER_DURATION;
     const swooshStart = lettersLand - SWOOSH_LEAD;
     const stripeStart = swooshStart + STRIPE_LAG;
-    const introLength = intro ? Math.max(swooshStart + SWOOSH_DURATION, stripeStart + STRIPE_DURATION) : 0;
+    const introLength = intro ? Math.max(lettersLand, swooshStart + SWOOSH_DURATION, stripeStart + STRIPE_DURATION) : 0;
     // Unsheared text-local x range the reveal sweeps across.
     const revealFrom = TEXT_MIN_X * LETTER_WIDTH - 0.3;
     const revealTo = TEXT_MAX_X * LETTER_WIDTH + 0.3;
     let introStart = null;
+    let lastTime = null;
 
     function placeLetter({ pivot, center, restRadius, restAngle }, t) {
         if (t >= 1) {
@@ -900,6 +1184,51 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         const edge = revealFrom + (revealTo - revealFrom) * progress;
         localPlane.setComponents(-1, SHEAR, 0, edge).normalize();
         mats.clip[0].copy(localPlane).applyMatrix4(textGroup.matrixWorld);
+        return edge;
+    }
+
+    // Moves a beam's light along its reveal edge, following the middle of
+    // the piece, heats the edge and throws sparks. s is the reveal's raw
+    // progress (0..1 while it draws in); fade is BEAM_FADE in those units.
+    const sparkFrom = new THREE.Vector3();
+    const sparkTo = new THREE.Vector3();
+    function updateBeam(beam, edge, s, fade, t, dt) {
+        const heat = smoothstep(0, 0.08, s) * (1 - smoothstep(1, 1 + fade, s));
+        beam.face.uniforms.uBeam.value.set(edge, heat, t);
+        // The light goes out the moment the edge reaches the end of the piece.
+        const on = smoothstep(0, 0.08, s) * smoothstep(beam.maxX, beam.maxX - 0.05, edge);
+        beam.group.visible = on > 0.001;
+        if (!beam.group.visible) {
+            beam.last = null;
+            return;
+        }
+        const x = Math.min(beam.maxX - 0.01, Math.max(beam.minX + 0.01, edge));
+        const y = midlineAt(beam.outline, x) ?? 0;
+        beam.group.position.set(x + SHEAR * y, y, beam.z);
+        // An arc-light flicker.
+        const flicker = 0.8 + Math.random() * 0.35;
+        for (const sprite of beam.sprites) {
+            sprite.scale.setScalar(sprite.userData.scale * (0.85 + 0.15 * on) * flicker);
+            sprite.material.opacity = on * flicker;
+        }
+
+        // Sparks, spread along the path the light moved this frame.
+        sparkTo.set(x + SHEAR * y, y, beam.z).applyMatrix4(textGroup.matrixWorld);
+        sparkFrom.copy(beam.last ?? sparkTo);
+        const drift = dt > 0 ? ((sparkTo.x - sparkFrom.x) / dt) * 0.15 : 0;
+        beam.carry += beam.sparkRate * on * dt;
+        const count = Math.floor(beam.carry);
+        beam.carry -= count;
+        for (let i = 0; i < count; i++) {
+            const k = Math.random();
+            sparks.emit(
+                sparkFrom.x + (sparkTo.x - sparkFrom.x) * k,
+                sparkFrom.y + (sparkTo.y - sparkFrom.y) * k,
+                sparkFrom.z + (sparkTo.z - sparkFrom.z) * k,
+                drift,
+            );
+        }
+        beam.last = (beam.last ?? new THREE.Vector3()).copy(sparkTo);
     }
 
     // ---- Animation -----------------------------------------------------------
@@ -923,13 +1252,23 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
             placeLetter(letter, Math.max(0, (t - INTRO_DELAY - i * LETTER_STAGGER) / LETTER_DURATION));
         });
         root.updateMatrixWorld(true);
-        setReveal(swooshMats, easeInOutSine(Math.min(1, Math.max(0, (t - swooshStart) / SWOOSH_DURATION))));
-        setReveal(stripeMats, easeInOutSine(Math.min(1, Math.max(0, (t - stripeStart) / STRIPE_DURATION))));
+        const swooshEdge = setReveal(swooshMats, easeInOutSine(Math.min(1, Math.max(0, (t - swooshStart) / SWOOSH_DURATION))));
+        const stripeEdge = setReveal(stripeMats, easeInOutSine(Math.min(1, Math.max(0, (t - stripeStart) / STRIPE_DURATION))));
+        if (intro) {
+            const dt = lastTime === null ? 0 : Math.min(0.05, Math.max(0, time - lastTime));
+            updateBeam(beams[0], swooshEdge, (t - swooshStart) / SWOOSH_DURATION, BEAM_FADE / SWOOSH_DURATION, t, dt);
+            updateBeam(beams[1], stripeEdge, (t - stripeStart) / STRIPE_DURATION, BEAM_FADE / STRIPE_DURATION, t, dt);
+            const halfHeight = (FRAME_HEIGHT * LOGO_PADDING) / 2;
+            sparks.update(dt, halfHeight * camera.aspect, halfHeight);
+        }
+        lastTime = time;
         const introDone = t >= introLength;
         const sinceIntro = intro ? Math.max(0, t - introLength) : time;
 
-        // A glint sweeps across the letters every 5s, once the intro is done.
-        const cycle = introDone ? sinceIntro % 5 : 99;
+        // A glint sweeps across the letters every 5s, starting just before
+        // the intro is done.
+        const sinceGlint = intro ? t - (introLength - GLINT_LEAD) : time;
+        const cycle = sinceGlint >= 0 ? sinceGlint % 5 : 99;
         const sweep = cycle < 1.6 ? -1.5 + (cycle / 1.6) * 6 : 99;
         for (const m of faceMaterials) m.uniforms.uSweep.value = sweep;
 
@@ -955,12 +1294,15 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         const prevAlpha = renderer.getClearAlpha();
         renderer.setClearColor(0x000000, 0);
 
+        // Spark sizes are in world units, so they need each target's height.
         camera.layers.set(0);
+        sparks.dotMaterial.uniforms.uViewport.value = target.height;
         renderer.setRenderTarget(target);
         renderer.clear();
         renderer.render(scene, camera);
 
         camera.layers.set(GLOW_LAYER);
+        sparks.dotMaterial.uniforms.uViewport.value = glowTarget.height;
         renderer.setRenderTarget(glowTarget);
         renderer.clear();
         renderer.render(scene, camera);
