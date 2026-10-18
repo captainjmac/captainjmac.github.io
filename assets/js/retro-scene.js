@@ -253,7 +253,8 @@ function init() {
     }
 
     if (logoEl) {
-        import('./retro-logo.js')
+        // Carry this script's ?v= cache-buster over to the logo module.
+        import(new URL('./retro-logo.js' + new URL(import.meta.url).search, import.meta.url).href)
             .then(({ createLogo }) => {
                 logo3d = createLogo(renderer, { starTexture });
                 logoPadding = logo3d.padding;
