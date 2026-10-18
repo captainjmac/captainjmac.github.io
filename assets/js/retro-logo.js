@@ -967,11 +967,14 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         recolorLine(ringGlow, ringPoints.length, (i) => shade(i, 0, 0.45, 0.35));
     }
 
-    // Text: tilt about its centre, then scale letter units to world units.
+    // Text: sways about the disc's centre (the disc and haze stay still),
+    // tilts about its own centre, then scales letter units to world units.
+    const sway = new THREE.Group();
+    root.add(sway);
     const tiltGroup = new THREE.Group();
     tiltGroup.position.set(-0.15, -0.05, 0);
     tiltGroup.rotation.z = TILT;
-    root.add(tiltGroup);
+    sway.add(tiltGroup);
 
     const textGroup = new THREE.Group();
     textGroup.scale.setScalar(TEXT_SCALE);
@@ -1350,7 +1353,7 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
             x: knockPoint.x * LOGO_PADDING,
             y: -knockPoint.y * LOGO_PADDING,
             scale: TEXT_SCALE / FRAME_HEIGHT,
-            rotation: { x: root.rotation.x, y: root.rotation.y, z: TILT },
+            rotation: { x: sway.rotation.x, y: sway.rotation.y, z: TILT },
             discBottom: DISC_RADIUS / (FRAME_HEIGHT / 2),
         };
     }
@@ -1411,13 +1414,13 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
     // ---- Animation -----------------------------------------------------------
     const tilt = { x: 0, y: 0 };
     function update(time, pointer) {
-        // Gentle sway, leaning toward the cursor when there is one.
+        // The text sways gently, leaning toward the cursor when there is one.
         const px = pointer ? pointer.x : 0;
         const py = pointer ? pointer.y : 0;
         tilt.x += (px - tilt.x) * 0.05;
         tilt.y += (py - tilt.y) * 0.05;
-        root.rotation.y = 0.16 * Math.sin(time * 0.5) + tilt.x * 0.25;
-        root.rotation.x = 0.07 * Math.sin(time * 0.37 + 1) + tilt.y * 0.15;
+        sway.rotation.y = 0.16 * Math.sin(time * 0.5) + tilt.x * 0.25;
+        sway.rotation.x = 0.07 * Math.sin(time * 0.37 + 1) + tilt.y * 0.15;
 
         haze.material.uniforms.uTime.value = time;
         paintRing(time);
