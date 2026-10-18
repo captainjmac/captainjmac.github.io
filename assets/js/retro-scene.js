@@ -272,7 +272,10 @@ function init() {
         // Carry this script's ?v= cache-buster over to the logo module.
         import(new URL('./retro-logo.js' + new URL(import.meta.url).search, import.meta.url).href)
             .then(({ createLogo }) => {
-                logo3d = createLogo(renderer, { starTexture });
+                // The intro plays on the landing page only, so it doesn't
+                // replay on every page; reduced motion skips it.
+                const intro = document.body.classList.contains('landing') && !reducedMotion;
+                logo3d = createLogo(renderer, { starTexture, intro });
                 logoPadding = logo3d.padding;
                 window.__retroLogo = { logo3d, glow }; // dev handle for tuning the logo
                 glowMaterial.uniforms.tTight.value = logo3d.glowTight;

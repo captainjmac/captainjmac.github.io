@@ -33,6 +33,22 @@ const MAX_TARGET_SIZE = 1600; // px, per side
 // glow, haze and the sway never clip at its edges.
 export const LOGO_PADDING = 1.4;
 
+// Intro (landing page): the letters swing out from behind the disc on a
+// tilted orbit, one after another, then the swoosh and stripe draw in from
+// left to right. Times in seconds.
+const INTRO_DELAY = 0.2;
+const LETTER_STAGGER = 0.22;
+const LETTER_DURATION = 2.2;
+const ORBIT_RADIUS = 1.45;   // starting orbit, as a multiple of the disc radius
+const ORBIT_RISE = 0.45;     // letters start this far above (text units), sinking into place
+const SWOOSH_LEAD = 0.95;    // starts this long before the last letter lands
+const SWOOSH_DURATION = 1.6;
+const STRIPE_LAG = 0.6;      // after the swoosh starts
+const STRIPE_DURATION = 1.2;
+
+const easeOutCubic = (t) => 1 - (1 - t) ** 3;
+const easeInOutSine = (t) => 0.5 - 0.5 * Math.cos(Math.PI * t);
+
 // Layer 0 is the visible logo; layer 1 is what feeds the glow.
 const GLOW_LAYER = 1;
 
@@ -380,6 +396,7 @@ function makeHazeMaterial() {
 // the swoosh get the full sweep too.
 function makeChromeFaceMaterial(yMin = 0, yMax = 1) {
     return new THREE.ShaderMaterial({
+        clipping: true, // the intro reveals the swoosh with a clipping plane
         uniforms: {
             uSweep: { value: 99 },
             uYRange: { value: new THREE.Vector2(yMin, yMax) },
@@ -394,12 +411,15 @@ function makeChromeFaceMaterial(yMin = 0, yMax = 1) {
             uStreak: { value: srgb('#ffd27a') },
         },
         vertexShader: /* glsl */ `
+            #include <clipping_planes_pars_vertex>
             varying vec2 vShape;
             varying vec3 vNormalV;
             void main() {
                 vShape = position.xy;
                 vNormalV = normalize(normalMatrix * normal);
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+                #include <clipping_planes_vertex>
             }
         `,
         fragmentShader: /* glsl */ `
@@ -409,8 +429,10 @@ function makeChromeFaceMaterial(yMin = 0, yMax = 1) {
             uniform vec3 uGroundTop, uGroundMid, uGroundHot, uGroundLow, uStreak;
             varying vec2 vShape;
             varying vec3 vNormalV;
+            #include <clipping_planes_pars_fragment>
 
             void main() {
+                #include <clipping_planes_fragment>
                 float y = (vShape.y - uYRange.x) / (uYRange.y - uYRange.x);
                 float h = 0.54 + vNormalV.y * 0.8 - vNormalV.x * 0.2;
                 vec3 col;
@@ -594,7 +616,8 @@ function makeBlurPass() {
 }
 
 // ---- Logo ----------------------------------------------------------------------
-export function createLogo(renderer, { starTexture } = {}) {
+export function createLogo(renderer, { starTexture, intro = false } = {}) {
+    renderer.localClippingEnabled = true; // only the swoosh materials clip
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 100);
     camera.position.z = (FRAME_HEIGHT * LOGO_PADDING / 2) / Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
@@ -613,6 +636,11 @@ export function createLogo(renderer, { starTexture } = {}) {
     const disc = new THREE.Mesh(new THREE.CircleGeometry(DISC_RADIUS, 128), makeDiscMaterial());
     disc.position.z = -0.5;
     root.add(disc);
+    // Black stand-in on the glow layer, so the glow of anything behind the
+    // disc (letters waiting or orbiting during the intro) can't bleed through.
+    const discOccluder = new THREE.Mesh(disc.geometry, new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    discOccluder.layers.set(GLOW_LAYER);
+    disc.add(discOccluder);
 
     const cyan = color('#4ff4ff');
     const magenta = color('#ff3fd8');
@@ -681,66 +709,85 @@ export function createLogo(renderer, { starTexture } = {}) {
     const occluderMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
 
     const extrude = { depth: DEPTH, bevelEnabled: true, bevelThickness: BEVEL_THICKNESS, bevelSize: BEVEL_SIZE, bevelSegments: 3, curveSegments: 16 };
+    const backingExtrude = { depth: 0.02, bevelEnabled: true, bevelThickness: 0, bevelSize: 0, bevelOffset: BACKING_OFFSET, bevelSegments: 1, curveSegments: 16 };
 
-    function addSolid(shape, offsetX, z, face = faceMaterial) {
-        const geometry = new THREE.ExtrudeGeometry(shape, extrude);
+    function placeGeometry(geometry, offsetX, z) {
         geometry.translate(offsetX, 0, 0);
         geometry.scale(LETTER_WIDTH, 1, 1);
         geometry.applyMatrix4(shearMatrix);
         geometry.translate(0, 0, z);
-        // Group 0 is the front/back caps, group 1 the walls and bevels.
-        const mesh = new THREE.Mesh(geometry, [face, sideMaterial]);
-        textGroup.add(mesh);
-        // Black stand-in on the glow layer so letters hide glow behind them.
-        const occluder = new THREE.Mesh(geometry, occluderMaterial);
+        return geometry;
+    }
+
+    // Builds one piece (a letter, the swoosh or the stripe) into its own
+    // pivot group, centred on the piece, so the intro can move and spin it.
+    //  - the chrome solid (group 0 is the front/back caps, group 1 the walls
+    //    and bevels)
+    //  - a black stand-in on the glow layer, so it hides glow behind it
+    //  - a dark slab cut slightly larger than the shape, just behind it: the
+    //    thick dark outline round each letter on the original, which also
+    //    fills the gaps between letters
+    //  - the bold laser line: a white-hot core plus a wider coloured glow
+    function buildPiece(shape, offsetX, z, mats, colorAt) {
+        const geometry = placeGeometry(new THREE.ExtrudeGeometry(shape, extrude), offsetX, z);
+        geometry.computeBoundingBox();
+        const center = geometry.boundingBox.getCenter(new THREE.Vector3());
+
+        const pivot = new THREE.Group();
+        pivot.position.copy(center);
+        const inner = new THREE.Group();
+        inner.position.copy(center).negate();
+        pivot.add(inner);
+        textGroup.add(pivot);
+
+        inner.add(new THREE.Mesh(geometry, [mats.face, mats.side]));
+        const occluder = new THREE.Mesh(geometry, mats.occluder);
         occluder.layers.set(GLOW_LAYER);
-        textGroup.add(occluder);
-        addBacking(shape, offsetX, z);
-    }
+        inner.add(occluder);
 
-    // A dark slab cut slightly larger than the shape, just behind it: the
-    // thick dark outline round each letter on the original, which also
-    // fills the gaps between letters. It blocks glow behind it too.
-    function addBacking(shape, offsetX, z) {
-        const geometry = new THREE.ExtrudeGeometry(shape, {
-            depth: 0.02,
-            bevelEnabled: true,
-            bevelThickness: 0,
-            bevelSize: 0,
-            bevelOffset: BACKING_OFFSET,
-            bevelSegments: 1,
-            curveSegments: 16,
-        });
-        geometry.translate(offsetX, 0, 0);
-        geometry.scale(LETTER_WIDTH, 1, 1);
-        geometry.applyMatrix4(shearMatrix);
-        geometry.translate(0, 0, z - BEVEL_THICKNESS - 0.03);
-        const backing = new THREE.Mesh(geometry, backingMaterial);
+        const backingGeometry = placeGeometry(new THREE.ExtrudeGeometry(shape, backingExtrude), offsetX, z - BEVEL_THICKNESS - 0.03);
+        const backing = new THREE.Mesh(backingGeometry, mats.backing);
         backing.layers.enable(GLOW_LAYER);
-        textGroup.add(backing);
-    }
+        inner.add(backing);
 
-    function addOutline(shape, offsetX, z, colorAt) {
         for (const loop of loopsFor(shape, offsetX)) {
-            // Bold laser line: a white-hot core plus a wider coloured glow.
-            textGroup.add(makeLine(loop, (x, y) => colorAt(x, y).clone().lerp(white, 0.5), z + FRONT_Z + 0.004, 0.036, 0));
-            textGroup.add(makeLine(loop, colorAt, z + FRONT_Z + 0.004, 0.055, GLOW_LAYER));
+            for (const line of [
+                makeLine(loop, (x, y) => colorAt(x, y).clone().lerp(white, 0.5), z + FRONT_Z + 0.004, 0.036, 0),
+                makeLine(loop, colorAt, z + FRONT_Z + 0.004, 0.055, GLOW_LAYER),
+            ]) {
+                if (mats.clip) line.material.clippingPlanes = mats.clip;
+                inner.add(line);
+            }
         }
+        return { pivot, center };
     }
 
+    // Swoosh pieces get their own clipped copies of the shared materials, so
+    // the intro can reveal them without clipping the letters.
+    function clippedMaterials(face) {
+        const clip = [new THREE.Plane()];
+        const withClip = (m) => {
+            m.clippingPlanes = clip;
+            return m;
+        };
+        return {
+            clip,
+            face: withClip(face),
+            side: withClip(sideMaterial.clone()),
+            occluder: withClip(occluderMaterial.clone()),
+            backing: withClip(backingMaterial.clone()),
+        };
+    }
+
+    const letterMats = { face: faceMaterial, side: sideMaterial, occluder: occluderMaterial, backing: backingMaterial };
     const letterColor = (x, y) => pink.clone().lerp(cyan, smoothstep(0.2, 0.75, y));
-    for (const { shape, x } of LETTERS) {
-        const s = shape();
-        addSolid(s, x, 0);
-        addOutline(s, x, 0, letterColor);
-    }
+    const letters = LETTERS.map(({ shape, x }) => buildPiece(shape(), x, 0, letterMats, letterColor));
 
-    const swoosh = swooshMain();
-    addSolid(swoosh, 0, SWOOSH_Z, swooshFaceMaterial);
-    addOutline(swoosh, 0, SWOOSH_Z, (x, y) => orange.clone().lerp(cyan, smoothstep(SWOOSH_BOTTOM, SWOOSH_TOP - 0.01, y)));
-    const stripe = swooshStripe();
-    addSolid(stripe, 0, SWOOSH_Z * 2, stripeFaceMaterial);
-    addOutline(stripe, 0, SWOOSH_Z * 2, () => magenta);
+    const swooshMats = clippedMaterials(swooshFaceMaterial);
+    buildPiece(swooshMain(), 0, SWOOSH_Z, swooshMats,
+        (x, y) => orange.clone().lerp(cyan, smoothstep(SWOOSH_BOTTOM, SWOOSH_TOP - 0.01, y)));
+    const stripeMats = clippedMaterials(stripeFaceMaterial);
+    buildPiece(swooshStripe(), 0, SWOOSH_Z * 2, stripeMats, () => magenta);
 
     // Sparkles that flash on the chrome now and then.
     const sparkles = [];
@@ -796,6 +843,65 @@ export function createLogo(renderer, { starTexture } = {}) {
         for (const m of lineMaterials) m.resolution.set(w, h);
     }
 
+    // ---- Intro -----------------------------------------------------------------
+    // Disc centre in text-local space, for the letters' orbit.
+    root.updateMatrixWorld(true);
+    const discCenter = textGroup.worldToLocal(disc.getWorldPosition(new THREE.Vector3()));
+    const orbitRadius = (DISC_RADIUS * ORBIT_RADIUS) / TEXT_SCALE;
+    // Each letter's resting place in polar form around the disc's vertical
+    // axis (angle 0 is straight toward the viewer, positive to the right).
+    for (const letter of letters) {
+        const dx = letter.center.x - discCenter.x;
+        const dz = letter.center.z - discCenter.z;
+        letter.restRadius = Math.hypot(dx, dz);
+        letter.restAngle = Math.atan2(dx, dz);
+    }
+
+    const lettersLand = INTRO_DELAY + LETTER_STAGGER * (letters.length - 1) + LETTER_DURATION;
+    const swooshStart = lettersLand - SWOOSH_LEAD;
+    const stripeStart = swooshStart + STRIPE_LAG;
+    const introLength = intro ? Math.max(swooshStart + SWOOSH_DURATION, stripeStart + STRIPE_DURATION) : 0;
+    // Unsheared text-local x range the reveal sweeps across.
+    const revealFrom = TEXT_MIN_X * LETTER_WIDTH - 0.3;
+    const revealTo = TEXT_MAX_X * LETTER_WIDTH + 0.3;
+    let introStart = null;
+
+    function placeLetter({ pivot, center, restRadius, restAngle }, t) {
+        if (t >= 1) {
+            pivot.position.copy(center);
+            pivot.rotation.set(0, 0, 0);
+            pivot.scale.setScalar(1);
+            return;
+        }
+        // One continuous spiral round the disc: from directly behind it
+        // (angle π) past its right-hand edge to the letter's resting angle.
+        // The orbit stays wide until the letter is round the front of the
+        // disc, then tightens in step with the angle, so each letter moves
+        // into its own column and never sweeps across a neighbour's place.
+        // Angle, radius, height, spin and size all ease out monotonically,
+        // so the letter just decelerates into place with no overshoot.
+        const e = easeOutCubic(t);
+        const angle = Math.PI + (restAngle - Math.PI) * e;
+        const frontFrom = Math.PI / 2;
+        const tighten = Math.min(1, Math.max(0, (frontFrom - angle) / Math.max(frontFrom - restAngle, 0.05)));
+        const radius = orbitRadius + (restRadius - orbitRadius) * tighten;
+        pivot.position.set(
+            discCenter.x + Math.sin(angle) * radius,
+            center.y + ORBIT_RISE * (1 - e),
+            discCenter.z + Math.cos(angle) * radius,
+        );
+        pivot.rotation.set(0, angle - restAngle, 0); // spins down to face front
+        pivot.scale.setScalar(0.55 + 0.45 * e);
+    }
+
+    // Keeps everything left of the (italic-slanted) edge at x = edge.
+    const localPlane = new THREE.Plane();
+    function setReveal(mats, progress) {
+        const edge = revealFrom + (revealTo - revealFrom) * progress;
+        localPlane.setComponents(-1, SHEAR, 0, edge).normalize();
+        mats.clip[0].copy(localPlane).applyMatrix4(textGroup.matrixWorld);
+    }
+
     // ---- Animation -----------------------------------------------------------
     const tilt = { x: 0, y: 0 };
     function update(time, pointer) {
@@ -810,13 +916,25 @@ export function createLogo(renderer, { starTexture } = {}) {
         haze.material.uniforms.uTime.value = time;
         paintRing(time);
 
-        // A glint sweeps across the letters every 5s.
-        const cycle = time % 5;
+        if (introStart === null) introStart = time;
+        const t = intro ? time - introStart : Infinity;
+        letters.forEach((letter, i) => {
+            // Letters wait behind the disc (progress 0) until their turn.
+            placeLetter(letter, Math.max(0, (t - INTRO_DELAY - i * LETTER_STAGGER) / LETTER_DURATION));
+        });
+        root.updateMatrixWorld(true);
+        setReveal(swooshMats, easeInOutSine(Math.min(1, Math.max(0, (t - swooshStart) / SWOOSH_DURATION))));
+        setReveal(stripeMats, easeInOutSine(Math.min(1, Math.max(0, (t - stripeStart) / STRIPE_DURATION))));
+        const introDone = t >= introLength;
+        const sinceIntro = intro ? Math.max(0, t - introLength) : time;
+
+        // A glint sweeps across the letters every 5s, once the intro is done.
+        const cycle = introDone ? sinceIntro % 5 : 99;
         const sweep = cycle < 1.6 ? -1.5 + (cycle / 1.6) * 6 : 99;
         for (const m of faceMaterials) m.uniforms.uSweep.value = sweep;
 
         for (const s of sparkles) {
-            const f = Math.pow(Math.max(0, Math.sin(Math.PI * 2 * (time / s.period + s.phase))), 12);
+            const f = introDone ? Math.pow(Math.max(0, Math.sin(Math.PI * 2 * (sinceIntro / s.period + s.phase))), 12) : 0;
             s.sprite.material.opacity = f;
             s.sprite.scale.setScalar((0.6 * f) / TEXT_SCALE);
             s.sprite.visible = f > 0.01;
