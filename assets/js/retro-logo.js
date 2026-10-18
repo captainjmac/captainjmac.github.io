@@ -17,7 +17,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 // FRAME_HEIGHT world units tall at z = 0.
 const FRAME_HEIGHT = 6;
 const CAMERA_FOV = 30;
-const TEXT_SCALE = 1.75;
+const TEXT_SCALE = 1.66;
 const LETTER_WIDTH = 0.82;   // narrows the authored letters
 const SHEAR = 0.16;           // italic lean
 const TILT = 0.13;            // baseline rises to the right
@@ -27,6 +27,7 @@ const BEVEL_THICKNESS = 0.03;
 const BEVEL_SIZE = 0.02;
 const FRONT_Z = DEPTH + BEVEL_THICKNESS;
 const SWOOSH_Z = -0.06;       // swoosh sits just behind the letters
+const BACKING_OFFSET = 0.12;  // dark outline around each letter
 const MAX_TARGET_SIZE = 1600; // px, per side
 // The logo renders into a box this much larger than the CSS logo box, so
 // glow, haze and the sway never clip at its edges.
@@ -128,25 +129,35 @@ function letterC() {
     return s;
 }
 
+// Spaced so each letter's dark outline leaves a clear dark gap between them.
 const LETTERS = [
     { shape: letterJ, x: 0.0 },
-    { shape: letterM, x: 0.75 },
-    { shape: letterA, x: 1.65 },
-    { shape: letterC, x: 2.44 },
+    { shape: letterM, x: 0.86 },
+    { shape: letterA, x: 1.87 },
+    { shape: letterC, x: 2.77 },
 ];
-const TEXT_WIDTH = 3.16;
+const TEXT_WIDTH = 3.49;
+
+// Swoosh and stripe heights (letter units). The swoosh sits low enough
+// under the baseline that the letters' dark outline leaves a dark gap above
+// it, matching the gaps between letters.
+const SWOOSH_TOP = -0.14;
+const SWOOSH_BOTTOM = -0.26;
+const STRIPE_TOP = -0.35;
+const STRIPE_BOTTOM = -0.38;
 
 // The main swoosh hooks up out of the J's tail and runs under every letter.
 function swooshMain() {
     const w = TEXT_WIDTH;
+    const mid = (SWOOSH_TOP + SWOOSH_BOTTOM) / 2;
     const s = new THREE.Shape();
     s.moveTo(-0.30, 0.22);
-    s.quadraticCurveTo(-0.30, -0.08, 0.05, -0.08);
-    s.lineTo(w + 0.18, -0.08);
-    s.quadraticCurveTo(w + 0.30, -0.08, w + 0.30, -0.14);
-    s.quadraticCurveTo(w + 0.30, -0.20, w + 0.18, -0.20);
-    s.lineTo(0.05, -0.20);
-    s.quadraticCurveTo(-0.42, -0.20, -0.42, 0.22);
+    s.quadraticCurveTo(-0.30, SWOOSH_TOP, 0.05, SWOOSH_TOP);
+    s.lineTo(w + 0.18, SWOOSH_TOP);
+    s.quadraticCurveTo(w + 0.30, SWOOSH_TOP, w + 0.30, mid);
+    s.quadraticCurveTo(w + 0.30, SWOOSH_BOTTOM, w + 0.18, SWOOSH_BOTTOM);
+    s.lineTo(0.05, SWOOSH_BOTTOM);
+    s.quadraticCurveTo(-0.42, SWOOSH_BOTTOM, -0.42, 0.22);
     s.closePath();
     return s;
 }
@@ -154,14 +165,15 @@ function swooshMain() {
 // Thin second stripe beneath it.
 function swooshStripe() {
     const w = TEXT_WIDTH;
+    const mid = (STRIPE_TOP + STRIPE_BOTTOM) / 2;
     const s = new THREE.Shape();
-    s.moveTo(0.30, -0.24);
-    s.lineTo(w + 0.04, -0.24);
-    s.quadraticCurveTo(w + 0.08, -0.24, w + 0.08, -0.255);
-    s.quadraticCurveTo(w + 0.08, -0.27, w + 0.04, -0.27);
-    s.lineTo(0.30, -0.27);
-    s.quadraticCurveTo(0.26, -0.27, 0.26, -0.255);
-    s.quadraticCurveTo(0.26, -0.24, 0.30, -0.24);
+    s.moveTo(0.30, STRIPE_TOP);
+    s.lineTo(w + 0.04, STRIPE_TOP);
+    s.quadraticCurveTo(w + 0.08, STRIPE_TOP, w + 0.08, mid);
+    s.quadraticCurveTo(w + 0.08, STRIPE_BOTTOM, w + 0.04, STRIPE_BOTTOM);
+    s.lineTo(0.30, STRIPE_BOTTOM);
+    s.quadraticCurveTo(0.26, STRIPE_BOTTOM, 0.26, mid);
+    s.quadraticCurveTo(0.26, STRIPE_TOP, 0.30, STRIPE_TOP);
     s.closePath();
     return s;
 }
@@ -169,7 +181,7 @@ function swooshStripe() {
 // Text-local bounding box, for centring.
 const TEXT_MIN_X = -0.42;
 const TEXT_MAX_X = TEXT_WIDTH + 0.30;
-const TEXT_MIN_Y = -0.27;
+const TEXT_MIN_Y = STRIPE_BOTTOM;
 const TEXT_MAX_Y = 1.0;
 
 const shearMatrix = new THREE.Matrix4().makeShear(0, 0, SHEAR, 0, 0, 0);
@@ -651,10 +663,10 @@ export function createLogo(renderer, { starTexture } = {}) {
     tiltGroup.add(textGroup);
 
     const faceMaterial = makeChromeFaceMaterial(0, 1);
-    const swooshFaceMaterial = makeChromeFaceMaterial(-0.2, 0.25);
-    const stripeFaceMaterial = makeChromeFaceMaterial(-0.27, -0.24);
+    const swooshFaceMaterial = makeChromeFaceMaterial(SWOOSH_BOTTOM, 0.25);
+    const stripeFaceMaterial = makeChromeFaceMaterial(STRIPE_BOTTOM, STRIPE_TOP);
     const faceMaterials = [faceMaterial, swooshFaceMaterial, stripeFaceMaterial];
-    const borderColor = color('#04031a');
+    const backingMaterial = new THREE.MeshBasicMaterial({ color: color('#03021a') });
     const sideMaterial = new THREE.MeshStandardMaterial({
         color: color('#efe2ff'),
         metalness: 1,
@@ -680,15 +692,36 @@ export function createLogo(renderer, { starTexture } = {}) {
         const occluder = new THREE.Mesh(geometry, occluderMaterial);
         occluder.layers.set(GLOW_LAYER);
         textGroup.add(occluder);
+        addBacking(shape, offsetX, z);
+    }
+
+    // A dark slab cut slightly larger than the shape, just behind it: the
+    // thick dark outline round each letter on the original, which also
+    // fills the gaps between letters. It blocks glow behind it too.
+    function addBacking(shape, offsetX, z) {
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+            depth: 0.02,
+            bevelEnabled: true,
+            bevelThickness: 0,
+            bevelSize: 0,
+            bevelOffset: BACKING_OFFSET,
+            bevelSegments: 1,
+            curveSegments: 16,
+        });
+        geometry.translate(offsetX, 0, 0);
+        geometry.scale(LETTER_WIDTH, 1, 1);
+        geometry.applyMatrix4(shearMatrix);
+        geometry.translate(0, 0, z - BEVEL_THICKNESS - 0.03);
+        const backing = new THREE.Mesh(geometry, backingMaterial);
+        backing.layers.enable(GLOW_LAYER);
+        textGroup.add(backing);
     }
 
     function addOutline(shape, offsetX, z, colorAt) {
         for (const loop of loopsFor(shape, offsetX)) {
-            // Thick dark border; it sits inside the body, so only its outer
-            // half shows around the letter.
-            textGroup.add(makeLine(loop, () => borderColor, z - 0.02, 0.16, 0));
-            textGroup.add(makeLine(loop, (x, y) => colorAt(x, y).clone().lerp(white, 0.4), z + FRONT_Z + 0.004, 0.022, 0));
-            textGroup.add(makeLine(loop, colorAt, z + FRONT_Z + 0.004, 0.028, GLOW_LAYER));
+            // Bold laser line: a white-hot core plus a wider coloured glow.
+            textGroup.add(makeLine(loop, (x, y) => colorAt(x, y).clone().lerp(white, 0.5), z + FRONT_Z + 0.004, 0.036, 0));
+            textGroup.add(makeLine(loop, colorAt, z + FRONT_Z + 0.004, 0.055, GLOW_LAYER));
         }
     }
 
@@ -701,7 +734,7 @@ export function createLogo(renderer, { starTexture } = {}) {
 
     const swoosh = swooshMain();
     addSolid(swoosh, 0, SWOOSH_Z, swooshFaceMaterial);
-    addOutline(swoosh, 0, SWOOSH_Z, (x, y) => orange.clone().lerp(cyan, smoothstep(-0.2, -0.09, y)));
+    addOutline(swoosh, 0, SWOOSH_Z, (x, y) => orange.clone().lerp(cyan, smoothstep(SWOOSH_BOTTOM, SWOOSH_TOP - 0.01, y)));
     const stripe = swooshStripe();
     addSolid(stripe, 0, SWOOSH_Z * 2, stripeFaceMaterial);
     addOutline(stripe, 0, SWOOSH_Z * 2, () => magenta);
@@ -709,7 +742,7 @@ export function createLogo(renderer, { starTexture } = {}) {
     // Sparkles that flash on the chrome now and then.
     const sparkles = [];
     if (starTexture) {
-        const spots = [[0.06, 1.0], [1.36, 1.0], [3.16, 0.76], [TEXT_WIDTH + 0.30, -0.14], [-0.42, 0.22]];
+        const spots = [[0.06, 1.0], [1.47, 1.0], [TEXT_WIDTH, 0.76], [TEXT_WIDTH + 0.30, (SWOOSH_TOP + SWOOSH_BOTTOM) / 2], [-0.42, 0.22]];
         spots.forEach(([x, y], i) => {
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
                 map: starTexture,
