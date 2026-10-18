@@ -15,8 +15,11 @@
         }, 5000);
     </script>
     {%- seo -%}
-    <link rel="stylesheet" href="{{ "/assets/main.css" | relative_url }}">
-    <link rel="stylesheet" href="{{ "/assets/css/jmac.css" | relative_url }}">
+    {%- assign build = site.time | date: '%s' %}
+    <!-- ?v= is the build time, so each deploy fetches fresh site assets
+         despite the host's 4-hour browser cache. -->
+    <link rel="stylesheet" href="{{ "/assets/main.css" | relative_url }}?v={{ build }}">
+    <link rel="stylesheet" href="{{ "/assets/css/jmac.css" | relative_url }}?v={{ build }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
 
     <style>
@@ -33,6 +36,13 @@
                 overflow: visible;
             }
         }
+        /* Inline so it ships with the page and can never be stale: hidden
+           while the scene loads and once it draws the logo itself, still
+           clickable either way. */
+        html.scene-pending .jmac-logo.original,
+        html.webgl .jmac-logo.original {
+            opacity: 0;
+        }
     </style>
     <script type="importmap">
         {
@@ -43,10 +53,8 @@
         }
     </script>
     <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js">
-    <!-- ?v= is the build time, so each deploy fetches fresh scene scripts
-         despite the host's 4-hour browser cache. retro-scene.js passes it on
-         to the modules it imports. -->
-    <script type="module" src="{{ "/assets/js/retro-scene.js" | relative_url }}?v={{ site.time | date: '%s' }}"
+    <!-- retro-scene.js passes its ?v= on to the modules it imports. -->
+    <script type="module" src="{{ "/assets/js/retro-scene.js" | relative_url }}?v={{ build }}"
             onerror="document.documentElement.classList.remove('scene-pending')"></script>
 
     {%- feed_meta -%}

@@ -127,12 +127,8 @@ body {
     }
 }
 
-// Hidden while the scene loads (see head-retro.html) and once it draws the
-// logo itself; still clickable either way.
-html.scene-pending .jmac-logo.original,
-html.webgl .jmac-logo.original {
-    opacity: 0;
-}
+// The HTML logo's hide rule is inline in head-retro.html so it can't be
+// served stale from the browser cache.
 
 @media (max-width: $mobile) {
     .site-header .header-links {
