@@ -1,7 +1,8 @@
 // Retro background scene rendered with three.js into a single fixed canvas
 // behind the page content: gradient sky, scrolling perspective grid with a
-// cursor spotlight, the JMAC logo with its floor reflection, and twinkling
-// stars. All HTML (nav, portrait, tagline, post panel) sits on top.
+// cursor spotlight, the JMAC logo with its floor reflection, twinkling
+// stars and the relit portrait. All other HTML (nav, tagline, post panel)
+// sits on top.
 //
 // The logo's position is still owned by CSS: the <img> inside
 // .foreground-container is laid out as usual and this script draws the logo
@@ -295,7 +296,7 @@ function init() {
                 debrisGlowLayer = GLOW_LAYER;
                 sizeDebrisBloom();
                 logoPadding = logo3d.padding;
-                window.__retroLogo = { logo3d, glow, debris }; // dev handle for tuning the logo
+                window.__retroLogo = { logo3d, glow, debris, portraitMaterial }; // dev handle for tuning
                 glowMaterial.uniforms.tTight.value = logo3d.glowTight;
                 glowMaterial.uniforms.tWide.value = logo3d.glowWide;
                 glow.visible = true;
@@ -596,6 +597,166 @@ function init() {
         logoFront.scale.copy(logo.scale);
     }
 
+    // ---- Portrait --------------------------------------------------------
+    // The portrait is relit here rather than shown as a flat image. Its art
+    // is lit by a pink key from the left and a blue fill, and
+    // _tools/portrait-maps.py unmixes the two into separate channels, so
+    // the shader can rebuild it with any light colours. Only the key light
+    // changes, so the light still comes from the left alone: it pulses, and
+    // when the logo's glint sweeps across its letters, the key turns violet
+    // and a cyan wash follows across the portrait, catching the linework
+    // where the key falls. The fill stays as it was.
+    // Like the logo, its <img> owns the layout and is the no-WebGL fallback.
+    const portraitEl = document.querySelector('.foreground-container .jmac-scary');
+    const PORTRAIT_LAYER = 2; // drawn last, over everything, as the <img> was
+    // The art's two lights (linear RGB), as fitted by portrait-maps.py.
+    const KEY_COLOR = new THREE.Color(1.0, 0.0122, 0.1251);
+    const FILL_COLOR = new THREE.Color(0.0011, 0.0446, 0.4567);
+    const SHINE_KEY_COLOR = new THREE.Color(0.35, 0.05, 1.0); // the key turns violet...
+    const SHINE_COLOR = new THREE.Color(0.25, 0.95, 1.0);     // ...as cyan light washes over
+    const PORTRAIT_FX_FADE = 1.5; // s for the new lighting to come up once it's drawn
+
+    const portraitMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            map: { value: null },
+            uTexel: { value: new THREE.Vector2(1, 1) },
+            uAspect: { value: 1 },
+            uKey: { value: KEY_COLOR.clone() },
+            uFill: { value: FILL_COLOR.clone() },
+            uShine: { value: new THREE.Color(0, 0, 0) },
+            uShineDir: { value: new THREE.Vector2(1, 0) },
+            uShinePos: { value: -9 },
+            uOpacity: { value: 1 },
+        },
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.CustomBlending,
+        blendSrc: THREE.OneFactor,
+        blendDst: THREE.OneMinusSrcAlphaFactor,
+        blendSrcAlpha: THREE.OneFactor,
+        blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+        vertexShader: planeVertex,
+        fragmentShader: /* glsl */ `
+            uniform sampler2D map;   // r: key, g: fill (gamma 2.2), b: relief, a: alpha
+            uniform vec2 uTexel;
+            uniform float uAspect;   // width / height
+            uniform vec3 uKey, uFill, uShine;
+            uniform vec2 uShineDir;  // unit direction the shine travels, aspect-corrected uv
+            uniform float uShinePos; // its band's position along that, -1..1 across the portrait
+            uniform float uOpacity;
+            varying vec2 vUv;
+
+            float relief(vec2 uv) {
+                return texture2D(map, uv).b;
+            }
+
+            void main() {
+                vec4 t = texture2D(map, vUv);
+                float key = pow(t.r, 2.2);
+                float fill = pow(t.g, 2.2);
+                vec3 col = key * uKey + fill * uFill;
+
+                // Shine: a band of extra key light from the logo's side, only
+                // where the key falls. The linework is treated as raised, so
+                // strokes facing the logo catch it most.
+                vec2 p = vec2((vUv.x - 0.5) * uAspect, vUv.y - 0.5);
+                float extent = 0.5 * (abs(uShineDir.x) * uAspect + abs(uShineDir.y));
+                float along = dot(p, uShineDir) / extent;
+                float band = exp(-pow((along - uShinePos) * 2.2, 2.0));
+                if (band > 0.01) {
+                    vec2 dx = vec2(uTexel.x, 0.0);
+                    vec2 dy = vec2(0.0, uTexel.y);
+                    vec3 n = normalize(vec3(
+                        (relief(vUv - dx) - relief(vUv + dx)) * 6.0,
+                        (relief(vUv - dy) - relief(vUv + dy)) * 6.0,
+                        1.0));
+                    vec3 l = normalize(vec3(-uShineDir, 0.7));
+                    float lit = max(dot(n, l), 0.0);
+                    col += uShine * band * key * (2.5 + pow(lit, 4.0) * 6.0);
+                }
+
+                col = linearToOutputTexel(vec4(col, 1.0)).rgb;
+                gl_FragColor = vec4(col * t.a, t.a) * uOpacity;
+            }
+        `,
+    });
+    const portrait = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), portraitMaterial);
+    portrait.layers.set(PORTRAIT_LAYER);
+    portrait.visible = false;
+    scene.add(portrait);
+    let portraitFx = 0;
+
+    // Content pages hide the portrait, so they don't fetch its maps.
+    if (portraitEl && document.body.classList.contains('landing')) {
+        const src = new URL('../img/jmac-portrait-light.png' + new URL(import.meta.url).search, import.meta.url);
+        new THREE.TextureLoader().load(src.href, (texture) => {
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            portraitMaterial.uniforms.map.value = texture;
+            portraitMaterial.uniforms.uTexel.value.set(1 / texture.image.width, 1 / texture.image.height);
+            portrait.visible = true;
+            if (reducedMotion) portraitFx = 1;
+            requestRender();
+        });
+    }
+
+    let portraitRect = null;
+    function updatePortrait() {
+        if (!portraitEl || !portrait.visible) return;
+        const r = portraitEl.getBoundingClientRect();
+        portraitRect = r;
+        portrait.position.set(r.left + r.width / 2, -(r.top + r.height / 2), 0);
+        portrait.scale.set(r.width, r.height, 1);
+        // Follows the <img>'s opacity, which fades it out on content pages.
+        portraitMaterial.uniforms.uOpacity.value = parseFloat(getComputedStyle(portraitEl).opacity);
+        portraitMaterial.uniforms.uAspect.value = r.width / Math.max(1, r.height);
+    }
+
+    // Every few seconds the key flickers like a neon tube: a short burst
+    // of quick, shallow dips.
+    let nextFlicker = 2 + Math.random() * 4;
+    let flickerUntil = 0;
+    let flickerLevel = 1;
+    let flickerChange = 0;
+    function keyFlicker(time) {
+        if (time >= nextFlicker) {
+            flickerUntil = time + 0.25 + Math.random() * 0.45;
+            nextFlicker = flickerUntil + 3 + Math.random() * 6;
+        }
+        if (time >= flickerUntil) return 1;
+        if (time >= flickerChange) {
+            flickerLevel = Math.random() < 0.55 ? 0.6 + Math.random() * 0.25 : 1;
+            flickerChange = time + 0.03 + Math.random() * 0.08;
+        }
+        return flickerLevel;
+    }
+
+    // Light the portrait for this moment: the key pulses gently and
+    // flickers now and then, and while the logo's glint sweeps, the shine
+    // follows it across.
+    function lightPortrait(time) {
+        if (!portrait.visible) return;
+        const u = portraitMaterial.uniforms;
+        const fx = portraitFx;
+        const progress = logo3d ? logo3d.shine.progress : -1;
+        // The shine trails the glint a little, as if it has to reach him.
+        const s = progress >= 0.2 ? (progress - 0.2) / 0.8 : -1;
+        const env = s >= 0 ? Math.sin(Math.PI * s) ** 2 : 0;
+        const pulse = 1 + fx * (0.09 * Math.sin(time * 1.7) + 0.04 * Math.sin(time * 4.1 + 1.3));
+        // The flicker holds off while the shine is on him.
+        const flicker = 1 - fx * (1 - keyFlicker(time)) * (1 - env);
+        u.uKey.value.copy(KEY_COLOR).lerp(SHINE_KEY_COLOR, 0.35 * env * fx).multiplyScalar(pulse * flicker);
+        u.uShine.value.copy(SHINE_COLOR).multiplyScalar(fx * env * 1.1);
+        u.uShinePos.value = s >= 0 ? -1.6 + 3.2 * s : -9;
+        // It travels from the logo toward the portrait (uv y is up).
+        if (logoRect && portraitRect) {
+            const dx = portraitRect.left + portraitRect.width / 2 - (logoRect.left + logoRect.width / 2);
+            const dy = portraitRect.top + portraitRect.height / 2 - (logoRect.top + logoRect.height / 2);
+            const len = Math.hypot(dx, dy) || 1;
+            u.uShineDir.value.set(dx / len, -dy / len);
+        }
+    }
+
     // ---- Stars -----------------------------------------------------------
     // Sparkle texture: soft halo + four-point cross streaks + bright core.
     // Drawn in white so per-star tinting works.
@@ -782,8 +943,16 @@ function init() {
             camera.layers.set(0);
             renderer.autoClear = true;
         }
-        // Hide the HTML logo only once a frame with the WebGL logo is drawn.
+        if (portrait.visible) {
+            renderer.autoClear = false;
+            camera.layers.set(PORTRAIT_LAYER);
+            renderer.render(scene, camera);
+            camera.layers.set(0);
+            renderer.autoClear = true;
+        }
+        // Hide the HTML logo and portrait only once WebGL has drawn them.
         if (logo.visible) document.documentElement.classList.add('webgl');
+        if (portrait.visible) document.documentElement.classList.add('webgl-portrait');
     }
 
     function tick(now) {
@@ -798,8 +967,11 @@ function init() {
             logoFade = Math.min(1, logoFade + dt / LOGO_FADE_SECONDS);
             applyLogoFade();
         }
+        if (portrait.visible && portraitFx < 1) portraitFx = Math.min(1, portraitFx + dt / PORTRAIT_FX_FADE);
         updateLogo(); // follows CSS layout changes, including transitions
+        updatePortrait();
         renderLogo(clock);
+        lightPortrait(clock);
         updateDebris(dt);
         updateStars(dt);
         render();
@@ -813,7 +985,9 @@ function init() {
         requestAnimationFrame(() => {
             renderQueued = false;
             updateLogo();
+            updatePortrait();
             renderLogo(0);
+            lightPortrait(0);
             render();
         });
     }
@@ -837,10 +1011,11 @@ function init() {
     canvas.addEventListener('webglcontextlost', (e) => {
         e.preventDefault();
         stop();
-        document.documentElement.classList.remove('webgl', 'scene-pending');
+        document.documentElement.classList.remove('webgl', 'webgl-portrait', 'scene-pending');
     });
     canvas.addEventListener('webglcontextrestored', () => {
         if (logo.visible) document.documentElement.classList.add('webgl');
+        if (portrait.visible) document.documentElement.classList.add('webgl-portrait');
         start();
         requestRender();
     });

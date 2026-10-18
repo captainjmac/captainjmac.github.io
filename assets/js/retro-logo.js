@@ -1413,6 +1413,9 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
 
     // ---- Animation -----------------------------------------------------------
     const tilt = { x: 0, y: 0 };
+    // How far the current glint is across the letters (0..1), or -1 between
+    // glints, for the scene to light other things in time with it.
+    const shine = { progress: -1 };
     function update(time, pointer) {
         // The text sways gently, leaning toward the cursor when there is one.
         const px = pointer ? pointer.x : 0;
@@ -1464,6 +1467,7 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         const cycle = sinceGlint >= 0 ? sinceGlint % 5 : 99;
         const sweep = cycle < 1.6 ? -1.5 + (cycle / 1.6) * 6 : 99;
         for (const m of faceMaterials) m.uniforms.uSweep.value = sweep;
+        shine.progress = cycle < 1.6 ? cycle / 1.6 : -1;
 
         // The sparkles sit on the letters' corners, so they rest while any
         // letter is away.
@@ -1513,6 +1517,7 @@ export function createLogo(renderer, { starTexture, intro = false } = {}) {
         frontTexture: frontTarget.texture,
         glowTight: bloom.tight,
         glowWide: bloom.wide,
+        shine,
         setSize,
         update,
         render,

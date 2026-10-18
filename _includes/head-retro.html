@@ -43,6 +43,12 @@
         html.webgl .jmac-logo.original {
             opacity: 0;
         }
+        /* The scene draws the portrait too, following the <img>'s box and
+           opacity, so it's hidden without touching either. */
+        html.webgl-portrait .jmac-scary {
+            visibility: hidden;
+            transition: all 1s, visibility 0s;
+        }
     </style>
     <script type="importmap">
         {
