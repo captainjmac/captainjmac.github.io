@@ -2,6 +2,18 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+        // Keep the HTML logo hidden while the WebGL scene loads, so it doesn't
+        // flash up before the 3D logo. retro-scene.js reveals it if WebGL is
+        // unavailable; this reveals it if the scene hasn't drawn a logo in 5s
+        // (e.g. the CDN is unreachable).
+        document.documentElement.classList.add('scene-pending');
+        setTimeout(function () {
+            if (!document.documentElement.classList.contains('webgl')) {
+                document.documentElement.classList.remove('scene-pending');
+            }
+        }, 5000);
+    </script>
     {%- seo -%}
     <link rel="stylesheet" href="{{ "/assets/main.css" | relative_url }}">
     <link rel="stylesheet" href="{{ "/assets/css/jmac.css" | relative_url }}">
@@ -34,7 +46,8 @@
     <!-- ?v= is the build time, so each deploy fetches fresh scene scripts
          despite the host's 4-hour browser cache. retro-scene.js passes it on
          to the modules it imports. -->
-    <script type="module" src="{{ "/assets/js/retro-scene.js" | relative_url }}?v={{ site.time | date: '%s' }}"></script>
+    <script type="module" src="{{ "/assets/js/retro-scene.js" | relative_url }}?v={{ site.time | date: '%s' }}"
+            onerror="document.documentElement.classList.remove('scene-pending')"></script>
 
     {%- feed_meta -%}
     {%- if jekyll.environment == 'production' and site.google_analytics -%}

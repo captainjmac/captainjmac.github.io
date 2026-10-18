@@ -22,6 +22,7 @@ try {
 }
 
 if (renderer) init();
+else document.documentElement.classList.remove('scene-pending'); // show the HTML logo
 
 function init() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, finePointer ? 2 : 1.5));
@@ -201,7 +202,7 @@ function init() {
         });
     }
     const glowMaterial = new THREE.ShaderMaterial({
-        uniforms: { tTight: { value: null }, tWide: { value: null }, uTime: { value: 0 } },
+        uniforms: { tTight: { value: null }, tWide: { value: null }, uTime: { value: 0 }, uFade: { value: 0 } },
         transparent: true,
         depthTest: false,
         depthWrite: false,
@@ -210,13 +211,14 @@ function init() {
         fragmentShader: /* glsl */ `
             uniform sampler2D tTight, tWide;
             uniform float uTime;
+            uniform float uFade;
             varying vec2 vUv;
             void main() {
                 // The bloom breathes, in a wave that rolls round the logo.
                 vec2 p = vUv - 0.5;
                 float wave = 0.85 + 0.3 * sin(atan(p.y, p.x) * 2.0 - uTime * 1.1) + 0.12 * sin(uTime * 2.3);
                 vec3 glow = texture2D(tWide, vUv).rgb * 0.3 * wave + texture2D(tTight, vUv).rgb * 0.3;
-                gl_FragColor = linearToOutputTexel(vec4(glow, 1.0));
+                gl_FragColor = linearToOutputTexel(vec4(glow * uFade, 1.0));
             }
         `,
     });
@@ -237,9 +239,23 @@ function init() {
     let logo3d = null;
     let logoPadding = 1; // plane size relative to the CSS logo box
 
+    // The logo fades in when it first appears rather than popping in.
+    const LOGO_FADE_SECONDS = 0.5;
+    let logoFade = 0;
+    function applyLogoFade() {
+        logoMaterial.uniforms.uOpacity.value = logoFade;
+        reflectionMaterial.uniforms.uOpacity.value = 0.1 * logoFade;
+        glowMaterial.uniforms.uFade.value = logoFade;
+    }
+    applyLogoFade();
+
     function showLogoTexture(texture) {
         logoMaterial.uniforms.map.value = reflectionMaterial.uniforms.map.value = texture;
         logo.visible = reflection.visible = true;
+        if (reducedMotion) {
+            logoFade = 1;
+            applyLogoFade();
+        }
         requestRender();
     }
 
@@ -482,6 +498,10 @@ function init() {
         // One 100px cell every 2s, as the old moveUp keyframes.
         gridUniforms.uScroll.value = elapsed * 50;
         clock += dt;
+        if (logo.visible && logoFade < 1) {
+            logoFade = Math.min(1, logoFade + dt / LOGO_FADE_SECONDS);
+            applyLogoFade();
+        }
         updateLogo(); // follows CSS layout changes, including transitions
         renderLogo(clock);
         updateStars(dt);
@@ -520,7 +540,7 @@ function init() {
     canvas.addEventListener('webglcontextlost', (e) => {
         e.preventDefault();
         stop();
-        document.documentElement.classList.remove('webgl');
+        document.documentElement.classList.remove('webgl', 'scene-pending');
     });
     canvas.addEventListener('webglcontextrestored', () => {
         if (logo.visible) document.documentElement.classList.add('webgl');
