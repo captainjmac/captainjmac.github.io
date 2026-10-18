@@ -1,13 +1,22 @@
+$mobile: 768px;
+
 .site-header {
     position: absolute;
     top: 0;
-    width: 100vw;
-    border:none;
+    left: 0;
+    right: 0;
+    border: none;
     z-index: 10;
 
     .header-links {
+        display: flex;
+        justify-content: flex-end;
+        gap: 3rem;
+        padding: 1.5rem 3rem 0;
+
         a {
-            font-size: 1.2rem;
+            font-size: 1.5rem;
+            white-space: nowrap;
         }
     }
 }
@@ -16,49 +25,34 @@
     display: none;
 }
 
-.background-container {
-    position: absolute;
-    width: 100vw;
-    height: 100vh;
+// three.js background (assets/js/retro-scene.js): sky, grid, logo, stars.
+.retro-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    display: block;
+    pointer-events: none;
 }
 
 .foreground-container {
     position: absolute;
-    width: 100vw;
-    height: 100vh;
-}
-
-.starfield-container {
-    position: absolute;
     top: 0;
     left: 0;
-    width: 100vw;
+    width: 100%;
     height: 100vh;
-    // Above the grid (z 1, in .background-container), below the logo (z 2).
-    z-index: 1;
-    pointer-events: none;
-
-    canvas {
-        display: block;
-        width: 100%;
-        height: 100%;
-    }
+    height: 100dvh;
 }
 
 body {
     font-size: 1.2rem;
 
-    .background-container .jmac-logo-outer {
-        z-index: 1;
-    }
-
-    .foreground-container .jmac-logo-outer {
-        z-index: 2;
-    }
-
     .jmac-logo-outer {
         display: block;
         position: relative;
+        z-index: 2;
         width: 85%;
         // Bottom edge is anchored at 77vh, so the (square) image must also be
         // capped against viewport height or it overflows the top on wide windows.
@@ -68,26 +62,13 @@ body {
         transform: translateX(-50%);
         transition: all 1s;
 
+        // The scene draws the logo (and its reflection) into this box; the
+        // <img> stays as the layout anchor, click target and no-WebGL fallback.
         .jmac-logo {
             display: block;
             position: relative;
             width: 100%;
-
-            &.original {
-                z-index: 2;
-                transform: translateY(-100%);
-            }
-
-            &.reflection {
-                z-index: 0;
-                opacity: 0.1;
-
-                // Original is shifted up by its own height, so the flipped
-                // copy mirrors it from the shared baseline. The PNG has ~6.9%
-                // transparent padding below the artwork, which doubles when
-                // mirrored — the translate pulls the art edges back together.
-                transform: translateY(-13.7%) scaleY(-1);
-            }
+            transform: translateY(-100%);
         }
     }
 
@@ -101,16 +82,9 @@ body {
         transition: all 1s;
     }
 
-    .side-pane {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        transition: all 1s;
-    }
-
     .tagline {
+        top: 80%;
+        z-index: 4;
         transition: 1s all;
     }
 
@@ -119,9 +93,6 @@ body {
             top: 62%;
             left: 17%;
             width: 30%;
-        }
-        .side-pane {
-            width: 30vw;
         }
         .main-pane {
             transform: translateX(0);
@@ -147,19 +118,80 @@ body {
 
     .post-panel {
         z-index: 20;
-
         position: relative;
-        margin-top: 0;
         background-color: rgb(32 33 47 / 89%);
         margin: 0 2rem 4rem;
         padding: 3rem;
         max-height: 84vh;
-        overflow-y: scroll;
-
+        overflow-y: auto;
     }
 }
 
+html.webgl .jmac-logo.original {
+    opacity: 0;
+}
 
-@media(screen and max-width: 540px) {
+@media (max-width: $mobile) {
+    .site-header .header-links {
+        justify-content: center;
+        gap: 1.25rem;
+        padding: 1rem 0.75rem 0;
 
+        a {
+            font-size: 1.05rem;
+        }
+    }
+
+    body {
+        .jmac-logo-outer {
+            width: 80vw;
+            max-width: 46dvh;
+            top: 58%;
+        }
+
+        .jmac-scary {
+            max-height: 36%;
+        }
+
+        .tagline {
+            top: auto;
+            bottom: 4%;
+            font-size: 1.4rem;
+            line-height: 1.4;
+            padding: 0 1rem;
+
+            span {
+                display: block;
+            }
+        }
+
+        // Content pages scroll as a normal document over the fixed canvas.
+        &.page {
+            .jmac-logo-outer {
+                position: fixed;
+                top: calc(3.5rem + min(30vw, 160px));
+                left: 50%;
+                width: 30vw;
+                max-width: 160px;
+            }
+
+            .main-pane {
+                position: relative;
+                top: auto;
+                right: auto;
+                width: auto;
+                height: auto;
+                margin-top: calc(4rem + min(30vw, 160px));
+                transform: none;
+                transition: none;
+            }
+
+            .post-panel {
+                margin: 0 0.75rem 1.5rem;
+                padding: 1.5rem 1.25rem;
+                max-height: none;
+                overflow: visible;
+            }
+        }
+    }
 }

@@ -1,31 +1,13 @@
 <!DOCTYPE html>
-<html lang="{{ page.lang | default: site.lang | default: " en" }}">
+<html lang="{{ page.lang | default: site.lang | default: " en" }}" data-theme="dark">
 
 {%- include head-retro.html -%}
 
 <body class="gradient-bg {% if page.is_landing %}landing{% else %}page{% endif %}" style="position: relative;">
 
+<canvas class="retro-canvas" aria-hidden="true"></canvas>
+
 {%- include header-retro.html -%}
-
-<div class="background-container">
-    <div class="grid-container" style="z-index: 1"></div>
-
-    <div class="grid-glow" aria-hidden="true" style="z-index: 1">
-        <div class="grid-glow-inner">
-            <div class="grid-container"></div>
-        </div>
-    </div>
-
-    <div class="jmac-logo-outer">
-        <img src="/assets/img/jmac-kool-logo-1-transparent-sml.png"
-             class="jmac-logo reflection"
-             style="z-index: 0;"
-        />
-    </div>
-    <!--            <div class="decorative-triangle xxx" style="position: absolute; top: 0; left: 0;"></div>-->
-</div>
-
-<div class="starfield-container"></div>
 
 <div class="foreground-container">
 
@@ -40,7 +22,7 @@
 
     <img src="/assets/img/jmac-scary-cutout-sml.png" class="jmac-scary"/>
 
-    <div class="tagline centered-text" style="z-index: 4; top: 80%">
+    <div class="tagline centered-text">
         <span class="neon-text-cyan">
             Full-stack web developer
         </span>

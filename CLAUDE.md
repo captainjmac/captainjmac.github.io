@@ -62,11 +62,13 @@ youtube_id: VIDEO_ID  # Optional, for YouTube embeds
 ### Key Visual Elements
 
 The site features a distinctive retro aesthetic:
-- Gradient backgrounds with animated grid overlay (`.grid-container`)
+- Background scene rendered with three.js into one fixed `<canvas class="retro-canvas">` (`assets/js/retro-scene.js`; three.js loaded from CDN via an import map in `head-retro.html`). It draws the gradient sky, the scrolling perspective grid with its cursor spotlight, the logo with its floor reflection, and the twinkling starfield. The grid shader inverts the original CSS `perspective(85px) rotateX(8deg)` transform, so its geometry matches the old CSS grid.
+- The logo's position is still controlled by CSS: `.foreground-container .jmac-logo.original` is laid out normally and the scene draws into its bounding box. Once a WebGL frame is drawn, the `<img>` is hidden via `html.webgl` but stays clickable, and it acts as the no-WebGL fallback.
+- All HTML (nav, portrait, tagline, `.main-pane` post panel) sits on top of the canvas
 - Neon text effects (`.neon-text-cyan`, `.neon-text-pink`)
-- CRT scanline overlay (`.scanlines`)
-- Twinkling starfield around the logo, rendered with PixiJS (`assets/js/starfield.js`; PixiJS v8 loaded from CDN in `head-retro.html`, canvas layered via `.starfield-container`)
-- Custom logo with reflection effect (`/assets/img/jmac-kool-logo-1-transparent-sml.png`)
+- CRT scanline overlay (`.scanlines`, CSS; drifts with a compositor-only transform)
+- Bulma is pinned to its dark theme (`data-theme="dark"` on `<html>`) so text stays light regardless of the OS colour scheme
+- Mobile layout (`max-width: 768px` in `_sass/_layout.scss`): content pages scroll as a normal document over the fixed canvas, with a small fixed logo under the nav
 - Landing page includes tagline: "Full-stack web developer • Fun-stacked game developer"
 
 ### Content Organization

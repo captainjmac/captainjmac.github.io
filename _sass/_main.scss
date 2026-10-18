@@ -94,3 +94,25 @@ table.credits {
 
     margin-bottom: 40px !important;
 }
+
+@media (max-width: 768px) {
+    .image-wrap,
+    .image-wrap-right {
+        float: none;
+        margin: 0 0 1rem;
+    }
+
+    .image-half,
+    .image-40,
+    .image-third {
+        max-width: 100%;
+    }
+
+    table.credits {
+        width: 100%;
+
+        tr td:first-of-type {
+            width: 50%;
+        }
+    }
+}

@@ -14,10 +14,19 @@
             background-color: black;
             overflow: hidden;
         }
+        @media (max-width: 768px) {
+            body.page, html:has(body.page) {
+                height: auto;
+                min-height: 100%;
+                overflow: visible;
+            }
+        }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.js" defer></script>
-    <script src="{{ "/assets/js/starfield.js" | relative_url }}" defer></script>
-    <script src="{{ "/assets/js/grid-glow.js" | relative_url }}" defer></script>
+    <script type="importmap">
+        { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js" } }
+    </script>
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js">
+    <script type="module" src="{{ "/assets/js/retro-scene.js" | relative_url }}"></script>
 
     {%- feed_meta -%}
     {%- if jekyll.environment == 'production' and site.google_analytics -%}
