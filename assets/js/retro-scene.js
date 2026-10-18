@@ -160,28 +160,133 @@ function init() {
     gridQuad.renderOrder = 0;
     scene.add(gridQuad);
 
-    // ---- Logo + reflection -----------------------------------------------
-    const logoGeometry = new THREE.PlaneGeometry(1, 1);
-    const logoMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false });
-    const reflectionMaterial = new THREE.MeshBasicMaterial({
-        transparent: true, opacity: 0.1, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+    // ---- Logo + reflection + glow ------------------------------------------
+    // The logo is a 3D model (retro-logo.js) rendered into its own target,
+    // drawn here as a plane in the CSS logo box, plus a faint mirrored copy
+    // on the floor and its neon glow added on top. If the 3D logo can't load,
+    // the original PNG is drawn instead.
+    const planeVertex = /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `;
+    // Targets hold premultiplied linear colour; convert to the output space
+    // before premultiplying so the faint reflection keeps its true strength.
+    function makeLogoPlaneMaterial(opacity) {
+        return new THREE.ShaderMaterial({
+            uniforms: { map: { value: null }, uOpacity: { value: opacity } },
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+            blending: THREE.CustomBlending,
+            blendSrc: THREE.OneFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
+            blendSrcAlpha: THREE.OneFactor,
+            blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+            vertexShader: planeVertex,
+            fragmentShader: /* glsl */ `
+                uniform sampler2D map;
+                uniform float uOpacity;
+                varying vec2 vUv;
+                void main() {
+                    vec4 c = texture2D(map, vUv);
+                    vec3 rgb = c.a > 0.0 ? c.rgb / c.a : vec3(0.0);
+                    rgb = linearToOutputTexel(vec4(rgb, 1.0)).rgb;
+                    gl_FragColor = vec4(rgb * c.a, c.a) * uOpacity;
+                }
+            `,
+        });
+    }
+    const glowMaterial = new THREE.ShaderMaterial({
+        uniforms: { tTight: { value: null }, tWide: { value: null }, uTime: { value: 0 } },
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        vertexShader: planeVertex,
+        fragmentShader: /* glsl */ `
+            uniform sampler2D tTight, tWide;
+            uniform float uTime;
+            varying vec2 vUv;
+            void main() {
+                // The bloom breathes, in a wave that rolls round the logo.
+                vec2 p = vUv - 0.5;
+                float wave = 0.85 + 0.3 * sin(atan(p.y, p.x) * 2.0 - uTime * 1.1) + 0.12 * sin(uTime * 2.3);
+                vec3 glow = texture2D(tWide, vUv).rgb * 0.3 * wave + texture2D(tTight, vUv).rgb * 0.3;
+                gl_FragColor = linearToOutputTexel(vec4(glow, 1.0));
+            }
+        `,
     });
+
+    const logoGeometry = new THREE.PlaneGeometry(1, 1);
+    const logoMaterial = makeLogoPlaneMaterial(1);
+    const reflectionMaterial = makeLogoPlaneMaterial(0.1);
     const logo = new THREE.Mesh(logoGeometry, logoMaterial);
     const reflection = new THREE.Mesh(logoGeometry, reflectionMaterial);
+    const glow = new THREE.Mesh(logoGeometry, glowMaterial);
     logo.renderOrder = 3;
     reflection.renderOrder = 1;
-    logo.visible = reflection.visible = false;
-    scene.add(logo, reflection);
+    glow.renderOrder = 4;
+    logo.visible = reflection.visible = glow.visible = false;
+    scene.add(logo, reflection, glow);
 
-    if (logoEl) {
+    const starTexture = makeStarTexture();
+    let logo3d = null;
+    let logoPadding = 1; // plane size relative to the CSS logo box
+
+    function showLogoTexture(texture) {
+        logoMaterial.uniforms.map.value = reflectionMaterial.uniforms.map.value = texture;
+        logo.visible = reflection.visible = true;
+        requestRender();
+    }
+
+    function loadPngLogo() {
         new THREE.TextureLoader().load(logoEl.currentSrc || logoEl.src, (texture) => {
             texture.colorSpace = THREE.SRGBColorSpace;
+            texture.premultiplyAlpha = true;
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-            logoMaterial.map = reflectionMaterial.map = texture;
-            logoMaterial.needsUpdate = reflectionMaterial.needsUpdate = true;
-            logo.visible = reflection.visible = true;
-            requestRender();
+            showLogoTexture(texture);
         });
+    }
+
+    if (logoEl) {
+        import('./retro-logo.js')
+            .then(({ createLogo }) => {
+                logo3d = createLogo(renderer, { starTexture });
+                logoPadding = logo3d.padding;
+                window.__retroLogo = { logo3d, glow }; // dev handle for tuning the logo
+                glowMaterial.uniforms.tTight.value = logo3d.glowTight;
+                glowMaterial.uniforms.tWide.value = logo3d.glowWide;
+                glow.visible = true;
+                updateLogo();
+                renderLogo(0);
+                showLogoTexture(logo3d.texture);
+            })
+            .catch((e) => {
+                console.warn('3D logo unavailable, using image', e);
+                loadPngLogo();
+            });
+    }
+
+    // Logo-relative pointer (-1..1 across the logo box), for the logo's lean.
+    let pointerX = null;
+    let pointerY = null;
+    function renderLogo(time) {
+        if (!logo3d || !logoRect || logoRect.width < 1) return;
+        logo3d.setSize(logoRect.width, logoRect.height, renderer.getPixelRatio());
+        let pointer = null;
+        if (pointerX !== null) {
+            pointer = {
+                x: Math.max(-1, Math.min(1, (pointerX - (logoRect.left + logoRect.width / 2)) / logoRect.width)),
+                y: Math.max(-1, Math.min(1, (pointerY - (logoRect.top + logoRect.height / 2)) / logoRect.height)),
+            };
+        }
+        logo3d.update(time, pointer);
+        glowMaterial.uniforms.uTime.value = time;
+        logo3d.render();
     }
 
     let logoRect = null;
@@ -190,11 +295,14 @@ function init() {
         const r = logoEl.getBoundingClientRect();
         logoRect = r;
         logo.position.set(r.left + r.width / 2, -(r.top + r.height / 2), 0);
-        logo.scale.set(r.width, r.height, 1);
-        // The reflection's outer box starts at the original's bottom edge,
-        // then translateY(-13.7%) scaleY(-1): its centre sits 0.863h lower.
+        logo.scale.set(r.width * logoPadding, r.height * logoPadding, 1);
+        // Mirrored about the artwork's baseline, 6.85% of the box height
+        // above its bottom edge (where the original PNG's art ended), so the
+        // mirrored centre sits 0.863h lower whatever the plane's padding.
         reflection.position.set(logo.position.x, logo.position.y - r.height * 0.863, 0);
-        reflection.scale.set(r.width, -r.height, 1);
+        reflection.scale.set(r.width * logoPadding, -r.height * logoPadding, 1);
+        glow.position.copy(logo.position);
+        glow.scale.copy(logo.scale);
     }
 
     // ---- Stars -----------------------------------------------------------
@@ -281,7 +389,7 @@ function init() {
     }
 
     function createStars() {
-        const texture = makeStarTexture();
+        const texture = starTexture;
         const count = Math.min(90, Math.round((size.w * size.h) / 18000));
         for (let i = 0; i < count; i++) {
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -343,15 +451,19 @@ function init() {
     if (finePointer) {
         window.addEventListener('pointermove', (e) => {
             gridUniforms.uPointer.value.set(e.clientX, e.clientY);
+            pointerX = e.clientX;
+            pointerY = e.clientY;
             requestRender();
         }, { passive: true });
         document.documentElement.addEventListener('pointerleave', () => {
             gridUniforms.uPointer.value.set(-9999, -9999);
+            pointerX = pointerY = null;
             requestRender();
         });
     }
 
     let elapsed = 0;
+    let clock = 0;
     let last = 0;
     let frame = 0;
 
@@ -368,7 +480,9 @@ function init() {
         elapsed = (elapsed + dt) % 2;
         // One 100px cell every 2s, as the old moveUp keyframes.
         gridUniforms.uScroll.value = elapsed * 50;
+        clock += dt;
         updateLogo(); // follows CSS layout changes, including transitions
+        renderLogo(clock);
         updateStars(dt);
         render();
     }
@@ -381,6 +495,7 @@ function init() {
         requestAnimationFrame(() => {
             renderQueued = false;
             updateLogo();
+            renderLogo(0);
             render();
         });
     }
